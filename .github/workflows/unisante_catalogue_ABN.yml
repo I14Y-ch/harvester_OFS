@@ -1,0 +1,78 @@
+name: I14Y Harvester Unisante catalogue ABN
+
+on:
+  schedule:
+    - cron: '0 0 * * *'  # Runs every day at midnight
+  workflow_dispatch:  # Allows manual triggering
+
+jobs:
+  harvest-data:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Download previous data
+      uses: dawidd6/action-download-artifact@v4
+      continue-on-error: true
+      with:
+          name: IDS-I14Y-json
+          workflow: unisante_catalogue_ABN.yml
+          workflow_conclusion: success
+          if_no_artifact_found: warn
+          path: unisante/data
+        
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.9'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        
+    - name: Get access token
+      id: get-token
+      run: |
+        python - <<EOF
+        import requests
+        import os
+        import json
+
+        def get_token_without_refresh(client_id,client_secret):
+            data = {
+                'grant_type': 'client_credentials',
+            }
+            response = requests.post('${{ secrets.URL_TOKEN_NO_REFRESH }}', data=data, verify=False, auth=(client_id,client_secret))
+            if response.status_code >= 400:
+              raise Exception("Failed to get token")
+            return response.json()
+
+        result = get_token_without_refresh('${{ secrets.CLIENT_ID }}','${{ secrets.CLIENT_SECRET }}')
+        
+        print(f"::set-output name=access_token::{result['access_token']}")
+        EOF
+
+    - name: Run harvester script
+      env:
+        GET_ENDPOINT_FROM_UNISANTE: ${{ secrets.GET_ENDPOINT_FROM_UNISANTE }}
+        PUT_ENDPOINT_TO_I14Y: ${{ secrets.PUT_ENDPOINT_TO_I14Y }}
+        POST_ENDPOINT_TO_I14Y: ${{ secrets.POST_ENDPOINT_TO_I14Y }}
+        IDS_I14Y: ${{ secrets.IDS_I14Y }}
+        ACCESS_TOKEN: ${{ steps.get-token.outputs.access_token }}
+      run: python scripts/unisante/harvester_ABN.py
+    
+    - name: Upload log
+      uses: actions/upload-artifact@v4
+      with:
+        name: harvest-log
+        path: harvest_log.txt
+
+    - name: Upload updated data
+      uses: actions/upload-artifact@v4
+      with:
+        name: I14Y_IDS-json
+        path: unisante/data/I14Y_IDS.json
+        retention-days: 2
