@@ -50,6 +50,7 @@ def change_status_i14y(id, status, token):
     response.raise_for_status()
     return response.json()
 
+
 def is_valid_distribution(distribution):
     """Check if a distribution is valid (not PDF)."""
     if not distribution.get('mediaType'):
@@ -89,17 +90,9 @@ def extract_dataset(graph, dataset_uri):
     if not has_valid_distributions(distributions):
         print(f"Skipping dataset {dataset_uri} - no valid distributions")
         return None
-  
-    original_identifier = get_literal(graph, dataset_uri, DCTERMS.identifier)
-    dataset_number = None
-    if original_identifier:
-        # extract number from URL pattern like https://data.bl.ch/explore/dataset/10650/
-        if "/dataset/" in original_identifier:
-            dataset_number = original_identifier.split("/dataset/")[-1].rstrip("/")
-    new_identifier = f"CH_KT_BL_dataset_{dataset_number}" if dataset_number else original_identifier
 
     dataset = { 
-        "identifiers": [new_identifier, original_identifier] if dataset_number else [original_identifier],
+        "identifiers": [get_literal(graph, dataset_uri, DCTERMS.identifier)],
         "title": get_multilingual_literal(graph, dataset_uri, DCTERMS.title),
         "description": get_multilingual_literal(graph, dataset_uri, DCTERMS.description),
         "accessRights": {"code": "PUBLIC"},  
@@ -122,8 +115,6 @@ def extract_dataset(graph, dataset_uri):
         "versionNotes": get_multilingual_literal(graph, dataset_uri, ADMS.versionNotes),
         "conformsTo": get_conforms_to(graph, dataset_uri),
         "themes": get_themes(graph, dataset_uri, DCAT.theme), 
-        "qualifiedRelations": [{"hadRole":{"code":"original"}, "relation":{"uri":get_literal(graph, dataset_uri, DCTERMS.identifier)}}]
-        
     }
 
     if not dataset["description"]:
@@ -139,7 +130,7 @@ def fetch_datasets_from_api() -> List[Dict]:
         # Request just 1 dataset
         params = {"skip": 0, "limit": 100}
         response = requests.get(
-            "https://data.bl.ch/api/explore/v2.1/catalog/exports/dcat",
+            "https://dam-api.bfs.admin.ch/hub/api/ogd/harvest",
             params=params,
             proxies=PROXIES,
             verify=False,
@@ -307,7 +298,7 @@ def extract_distributions(graph, dataset_uri):
             "languages": get_languages(graph, distribution_uri, DCTERMS.language),
             "packagingFormat": {"code": packaging_format} if packaging_format else None,
             "spatialResolution": get_literal(graph, distribution_uri, DCAT.spatialResolutionInMeters), 
-            "temporalResolution": get_literal(graph, distribution_uri, DCAT.temporalResolution)
+            "temporalResolution": get_literal(graph, distribution_uri, DCAT.temporalResolution) 
         }
         distributions.append(distribution)
     return distributions
@@ -462,6 +453,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
- 
