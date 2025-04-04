@@ -10,12 +10,163 @@ from bs4 import BeautifulSoup
 VCARD = Namespace("http://www.w3.org/2006/vcard/ns#")
 SCHEMA = Namespace("http://schema.org/")
 PROV = Namespace("http://www.w3.org/ns/prov#")
+ADMS = Namespace("http://www.w3.org/ns/adms#")
+SPDX = Namespace("http://spdx.org/rdf/terms#")
+dcat3 = Namespace("http://www.w3.org/ns/dcat#")
+
+def extract_dataset(graph, dataset_uri):
+    """Extracts dataset details from RDF graph."""
+    
+    distributions = extract_distributions(graph, dataset_uri)
+    
+    if not has_valid_distributions(distributions):
+        print(f"Skipping dataset {dataset_uri} - no valid distributions")
+        return None
+
+    dataset = { 
+        "identifiers": [get_literal(graph, dataset_uri, DCTERMS.identifier)],
+        "title": get_multilingual_literal(graph, dataset_uri, DCTERMS.title),
+        "description": get_multilingual_literal(graph, dataset_uri, DCTERMS.description),
+        "accessRights": {"code": "PUBLIC"},  
+        "issued": get_literal(graph, dataset_uri, DCTERMS.issued, is_date=True),
+        "modified": get_literal(graph, dataset_uri, DCTERMS.modified, is_date=True),
+        "publisher": DEFAULT_PUBLISHER, 
+        "landingPages": get_resource_list(graph, dataset_uri, DCAT.landingPage),
+        "keywords": get_multilingual_keywords(graph, dataset_uri, DCAT.keyword),
+        "distributions": [dist for dist in distributions if is_valid_distribution(dist)],
+        "languages": get_languages(graph, dataset_uri, DCTERMS.language),
+        "contactPoints": extract_contact_points(graph, dataset_uri),
+        "documentation": get_resource_list(graph, dataset_uri, FOAF.page),
+        "images": get_resource_list(graph, dataset_uri, SCHEMA.image),
+        "temporalCoverage": get_temporal_coverage(graph, dataset_uri), 
+        "frequency": get_frequency(graph, dataset_uri),
+        "isReferencedBy": get_is_referenced_by(graph, dataset_uri),
+        "relations": get_relations(graph, dataset_uri),
+        "spatial": get_spatial(graph, dataset_uri),
+        "version": get_literal(graph, dataset_uri, dcat3.version),
+        "versionNotes": get_multilingual_literal(graph, dataset_uri, ADMS.versionNotes),
+        "conformsTo": get_conforms_to(graph, dataset_uri),
+        "themes": get_themes(graph, dataset_uri, DCAT.theme), 
+        #"qualifiedRelations": [{"hadRole":{"code":"original"}, "relation":{"uri":get_literal(graph, dataset_uri, DCTERMS.identifier)}}]
+        
+    }
+
+    if not dataset["description"]:
+        print("no description found")
+        return None
+
+    return dataset
 
 
+def extract_distributions(graph, dataset_uri):
+    """Extracts distributions for a dataset."""
+    distributions = []
+    for distribution_uri in graph.objects(dataset_uri, DCAT.distribution):
+        title = get_multilingual_literal(graph, distribution_uri, DCTERMS.title)
+        description = get_multilingual_literal(graph, distribution_uri, DCTERMS.description)
+        if not title: 
+            title = {'de': 'Datenexport'}
+        if not description:  
+            description = {'de': 'Export der Daten'}
+
+        media_type_uri = get_single_resource(graph, distribution_uri, DCAT.mediaType)
+    
+        format_uri = get_single_resource(graph, distribution_uri, DCTERMS.format)
+        format_code = None
+
+        if format_uri:
+            format_uri_str = str(format_uri)
+            if format_uri_str in FORMAT_TYPE_MAPPING:
+                format_code = FORMAT_TYPE_MAPPING[format_uri_str]
+            else:
+                format_code = format_uri_str.split("/")[-1].upper()
+
+        download_url = get_single_resource(graph, distribution_uri, DCAT.downloadURL)
+        access_url = get_single_resource(graph, distribution_uri, DCAT.accessURL)
+        common_url = access_url if access_url else download_url
+        download_title = get_multilingual_literal(graph, distribution_uri, RDFS.label)
+        availability_uri = get_single_resource(graph, distribution_uri, URIRef("http://data.europa.eu/r5r/availability"))
+        license_uri = get_single_resource(graph, distribution_uri, DCTERMS.license)
+        license_code = license_uri.split("/")[-1] if license_uri else None
+        checksum_algorithm = get_literal(graph, distribution_uri, SPDX.checksumAlgorithm)
+        checksum_value = get_literal(graph, distribution_uri, SPDX.checksumValue)
+        packaging_format = get_literal(graph, distribution_uri, DCAT.packageFormat)
+
+        distribution = {
+            "title": title, 
+            "description": description,  
+            "format": {"code": format_code} if format_code and format_code in VALID_FORMAT_CODES else None,  
+            "downloadUrl": {
+                "label": download_title,  
+                "uri": download_url if download_url else common_url
+            } if common_url else None,
+           "mediaType": {"code": get_media_type(media_type_uri)} if media_type_uri and get_media_type(media_type_uri) else None,
+            "accessUrl": {
+                "label": download_title,  
+                "uri": common_url 
+            } if common_url else None,
+            "license": {"code": license_code} if license_code else None,  
+            "availability": {"code": get_availability_code(availability_uri)} if get_availability_code(availability_uri) else None,  
+            "issued": get_literal(graph, distribution_uri, DCTERMS.issued, is_date=True),
+            "modified": get_literal(graph, distribution_uri, DCTERMS.modified, is_date=True),
+            "rights": get_literal(graph, distribution_uri, DCTERMS.rights),
+            "accessServices": get_access_services(graph, distribution_uri),
+            "byteSize": get_literal(graph, distribution_uri, DCAT.byteSize),
+            "checksum": {
+                "algorithm": {"code": checksum_algorithm} if checksum_algorithm else None,
+                "checksumValue": checksum_value
+            } if checksum_algorithm or checksum_value else None,
+            "conformsTo": get_conforms_to(graph, distribution_uri),
+            "coverage": get_coverage(graph, distribution_uri),
+            "documentation": get_resource_list(graph, distribution_uri, FOAF.page),
+            "identifier": get_literal(graph, distribution_uri, DCTERMS.identifier),
+            "images": get_resource_list(graph, distribution_uri, SCHEMA.image),
+            "languages": get_languages(graph, distribution_uri, DCTERMS.language),
+            "packagingFormat": {"code": packaging_format} if packaging_format else None,
+            "spatialResolution": get_literal(graph, distribution_uri, DCAT.spatialResolutionInMeters), 
+            "temporalResolution": get_literal(graph, distribution_uri, DCAT.temporalResolution)
+        }
+        distributions.append(distribution)
+    return distributions
+
+
+def is_valid_distribution(distribution):
+    """Check if a distribution is valid (not PDF)."""
+    if not distribution.get('mediaType'):
+        return False
+    
+    # Check media type
+    media_code = distribution['mediaType'].get('code', '').lower()
+    excluded_media_types = ['application/pdf']
+    
+    # Check format if available
+    format_code = None
+    if distribution.get('format') and distribution['format'].get('code'):
+        format_code = distribution['format']['code'].upper()
+    
+    # Exclusion list for format codes
+    excluded_format_codes = ['PDF']
+    
+    # Distribution is invalid if:
+    # 1. Media type is in excluded list OR
+    # 2. Format code is in excluded list
+    if (media_code in excluded_media_types) or (format_code in excluded_format_codes):
+        return False
+    
+    return True
+
+
+def has_valid_distributions(distributions):
+    """Check if a dataset has at least one valid distribution."""
+    if not distributions:
+        return False
+    return any(is_valid_distribution(dist) for dist in distributions)
+    
 
 def remove_html_tags(text):
     """Remove HTML tags using BeautifulSoup."""
     return BeautifulSoup(text, "html.parser").get_text()
+
 
 def get_languages(graph, subject, predicate):
     """Retrieves a list of i14y codes for themes."""
