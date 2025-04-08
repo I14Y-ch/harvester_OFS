@@ -58,6 +58,8 @@ jobs:
         with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
             f.write(f"access_token={access_token}\n")
         EOF
+        outputs:
+        access_token: ${{ steps.get-token.outputs.access_token }}
     - name: Run harvester script
       env:
         ACCESS_TOKEN: ${{ steps.get-token.outputs.access_token }}
