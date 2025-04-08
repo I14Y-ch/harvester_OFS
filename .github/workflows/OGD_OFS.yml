@@ -30,6 +30,7 @@ jobs:
 
     - name: Install dependencies
       run: pip install -r requirements.txt
+
     - name: Get access token
       id: get-token
       env:
@@ -56,10 +57,14 @@ jobs:
         if 'access_token' not in response:
             raise Exception("Failed to get access token: " + str(response))
         access_token = 'Bearer ' + response['access_token']
-    
-        with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
-            f.write(f"access_token={access_token}\n")
+        
+        # Using echo to set output instead of Python file handling
+        print(f"::set-output name=access_token::{access_token}")
         EOF
+
+    - name: Debug token output
+      run: echo "Token output: ${{ steps.get-token.outputs.access_token }}"
+
     - name: Run harvester script
       env:
         ACCESS_TOKEN: ${{ steps.get-token.outputs.access_token }}
