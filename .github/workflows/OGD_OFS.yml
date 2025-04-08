@@ -60,8 +60,8 @@ jobs:
             raise Exception("Failed to get access token: " + str(response))
         access_token = 'Bearer ' + response['access_token']
         
-        # Using echo to set output instead of Python file handling
-        print(f"::set-output name=access_token::{access_token}")
+        with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+          f.write(f"access_token={access_token}\n")
         EOF
         
     - name: Run harvester script
