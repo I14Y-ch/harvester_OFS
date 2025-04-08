@@ -8,6 +8,10 @@ import os
 from dateutil import parser
 from typing import Dict, Any, List
 import datetime
+import time
+import urllib3
+
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 def fetch_datasets_from_api() -> List[Dict]:
     """Fetches a single test dataset from API for testing purposes"""
@@ -139,7 +143,7 @@ def change_level_i14y(id, level, token):
         #proxies=PROXIES
     )
     response.raise_for_status()
-    return response.json()
+    return response
 
 
 def change_status_i14y(id, status, token):
@@ -157,7 +161,7 @@ def change_status_i14y(id, status, token):
         #proxies=PROXIES
     )
     response.raise_for_status()
-    return response.json()
+    return response
 
 
 def submit_to_api(payload, identifier=None, previous_ids=None):
@@ -245,9 +249,7 @@ def main():
                 print(f"{action.capitalize()} dataset detected: {identifier}")
 
                 payload = create_dataset_payload(dataset)
-                print(f"[DEBUG] Payload created: {json.dumps(payload, indent=2)[:500]}...") 
                 response_id, action = submit_to_api(payload, identifier, previous_ids)
-                print(f"[DEBUG] API response: {response_id}")
                 response_id = response_id.strip('"')
 
                 if action == "created":
@@ -256,6 +258,7 @@ def main():
 
                     try:
                         change_level_i14y(response_id, 'Public', API_TOKEN)  
+                        time.sleep(0.5)
                         change_status_i14y(response_id, 'Recorded', API_TOKEN)
                         print(f"Set i14y level to Public and status to Registered for {identifier}")
                     except Exception as e:
