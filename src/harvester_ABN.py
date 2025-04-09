@@ -237,46 +237,74 @@ def main():
     for dataset in datasets:
         identifier = dataset['identifiers'][0]
         print(f"\nProcessing dataset: {identifier}")
-        print(f"Issued date: {dataset.get('issued')}")
-        print(f"Modified date: {dataset.get('modified')}")
-
-        modified_date = parse_date(dataset.get('modified'))
-        created_date = parse_date(dataset.get('issued', dataset.get('modified')))
-
+    
         try:
-            is_new_dataset = identifier not in previous_ids
-            is_updated_dataset = modified_date and modified_date > yesterday
-
-            if is_new_dataset or is_updated_dataset:
-                action = "created" if is_new_dataset else "updated"
-                print(f"{action.capitalize()} dataset detected: {identifier}")
-
-                payload = create_dataset_payload(dataset)
+            payload = create_dataset_payload(dataset)
+            
+            # Check if we know this dataset
+            if identifier in previous_ids:
+                # Force update existing dataset
                 response_id, action = submit_to_api(payload, identifier, previous_ids)
-                response_id = response_id.strip('"')
-
-                if action == "created":
-                    created_datasets.append(identifier)
-                    previous_ids[identifier] = {'id': response_id} 
-
-                    try:
-                        change_level_i14y(response_id, 'Public', API_TOKEN)  
-                        time.sleep(0.5)
-                        change_status_i14y(response_id, 'Recorded', API_TOKEN)
-                        print(f"Set i14y level to Public and status to Registered for {identifier}")
-                    except Exception as e:
-                        print(f"Error setting i14y level/status for {identifier}: {str(e)}")
-                elif action == "updated":
-                    updated_datasets.append(identifier)
-
-                print(f"Success - Dataset {action}: {response_id}\n")
-
+                updated_datasets.append(identifier)
             else:
-                unchanged_datasets.append(identifier)
-                print(f"No changes detected for dataset: {identifier}\n")
-
+                # Create new dataset
+                response_id, action = submit_to_api(payload)
+                created_datasets.append(identifier)
+                previous_ids[identifier] = {'id': response_id.strip('"')}
+                
+                # Set initial status for new datasets
+                try:
+                    change_level_i14y(response_id, 'Public', API_TOKEN)  
+                    time.sleep(0.5)
+                    change_status_i14y(response_id, 'Recorded', API_TOKEN)
+                except Exception as e:
+                    print(f"Error setting initial status: {str(e)}")
+                    
+            print(f"Success - Dataset {action}: {response_id}\n")
+            
         except Exception as e:
             print(f"Error processing dataset {identifier}: {str(e)}\n")
+        # print(f"\nProcessing dataset: {identifier}")
+        # print(f"Issued date: {dataset.get('issued')}")
+        # print(f"Modified date: {dataset.get('modified')}")
+
+        # modified_date = parse_date(dataset.get('modified'))
+        # created_date = parse_date(dataset.get('issued', dataset.get('modified')))
+
+        # try:
+        #     is_new_dataset = identifier not in previous_ids
+        #     is_updated_dataset = modified_date and modified_date > yesterday
+
+        #     if is_new_dataset or is_updated_dataset:
+        #         action = "created" if is_new_dataset else "updated"
+        #         print(f"{action.capitalize()} dataset detected: {identifier}")
+
+        #         payload = create_dataset_payload(dataset)
+        #         response_id, action = submit_to_api(payload, identifier, previous_ids)
+        #         response_id = response_id.strip('"')
+
+        #         if action == "created":
+        #             created_datasets.append(identifier)
+        #             previous_ids[identifier] = {'id': response_id} 
+
+        #             try:
+        #                 change_level_i14y(response_id, 'Public', API_TOKEN)  
+        #                 time.sleep(0.5)
+        #                 change_status_i14y(response_id, 'Recorded', API_TOKEN)
+        #                 print(f"Set i14y level to Public and status to Registered for {identifier}")
+        #             except Exception as e:
+        #                 print(f"Error setting i14y level/status for {identifier}: {str(e)}")
+        #         elif action == "updated":
+        #             updated_datasets.append(identifier)
+
+        #         print(f"Success - Dataset {action}: {response_id}\n")
+
+        #     else:
+        #         unchanged_datasets.append(identifier)
+        #         print(f"No changes detected for dataset: {identifier}\n")
+
+        # except Exception as e:
+        #     print(f"Error processing dataset {identifier}: {str(e)}\n")
             
     os.makedirs(os.path.dirname(path_to_data), exist_ok=True)
   
