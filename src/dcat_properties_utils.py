@@ -6,6 +6,8 @@ from rdflib import Namespace
 import unicodedata
 from mappings import *
 from bs4 import BeautifulSoup
+from urllib.parse import urlparse
+import re
 
 VCARD = Namespace("http://www.w3.org/2006/vcard/ns#")
 SCHEMA = Namespace("http://schema.org/")
