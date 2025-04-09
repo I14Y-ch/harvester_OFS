@@ -37,7 +37,7 @@ def fetch_datasets_from_api() -> List[Dict]:
         graph = Graph()
         graph.parse(data=response.text, format='xml')
 
-        for dataset_uri in list(graph.subjects(RDF.type, DCAT.Dataset))[:3]:
+        for dataset_uri in list(graph.subjects(RDF.type, DCAT.Dataset))[:30]:
             print(f"Processing test dataset URI: {dataset_uri}")
             dataset = extract_dataset(graph, dataset_uri)
             
