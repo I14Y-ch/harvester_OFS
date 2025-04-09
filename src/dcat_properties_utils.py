@@ -402,14 +402,37 @@ def get_qualified_attributions(graph, subject):
     return attributions
 
 
+
 def get_relations(graph, subject):
-    """Retrieves relations from RDF graph."""
-    return [{
-        "label": get_multilingual_literal(graph, obj, RDFS.label),
-        "uri": str(obj)
-    } for obj in graph.objects(subject, DCTERMS.relation)]
+    """Retrieves relations from RDF graph, handling malformed URIs with semicolons."""
+    relations = []
+    for obj in graph.objects(subject, DCTERMS.relation):
+        original_uri = str(obj)
+        
+        potential_uris = re.split(r';\s+', original_uri.strip('; \t\n\r'))
+        
+        for uri in potential_uris:
+            uri = uri.strip()
+            if not uri:
+                continue
+                
+            if is_valid_uri(uri):
+                relations.append({
+                    "label": get_multilingual_literal(graph, obj, RDFS.label),
+                    "uri": uri
+                })
+            else:
+                print(f"Skipping invalid relation URI: {uri}")
+    
+    return relations
 
-
+def is_valid_uri(uri):
+    """Check if the string looks like a valid URI"""
+    try:
+        result = urlparse(uri)
+        return all([result.scheme, result.netloc])
+    except:
+        return False
 
 def get_conforms_to(graph, subject):
     """Retrieves conformsTo from RDF graph."""
