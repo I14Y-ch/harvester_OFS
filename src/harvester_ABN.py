@@ -13,7 +13,7 @@ import urllib3
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-def fetch_all_datasets_from_api() -> List[Dict]:
+def fetch_datasets_from_api() -> List[Dict]:
     """Fetches all datasets from API"""
     all_datasets = []
     skip = 0
