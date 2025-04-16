@@ -1,6 +1,6 @@
 import os
 
-# OGD canton Basel-Landschaft API
+# OGD OFS API
 API_OFS_URL = "https://dam-api.bfs.admin.ch/hub/api/ogd/harvest"
 
 # I14Y API configuration
