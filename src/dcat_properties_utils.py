@@ -1,6 +1,6 @@
 from datetime import datetime 
 from config import *
-from rdflib import URIRef, Literal
+from rdflib import URIRef, Literal, Graph
 from rdflib.namespace import DCTERMS, FOAF, RDFS, DCAT, RDF
 from rdflib import Namespace
 import unicodedata
@@ -237,7 +237,7 @@ def normalize_text(text):
     return normalized_text.lower().strip()
 
 
-def get_multilingual_keywords(graph, subject: URIRef, predicate: URIRef) -> List[Dict]:
+def get_multilingual_keywords(graph: Graph, subject: URIRef, predicate: URIRef) -> List[Dict]:
     """Retrieves only keywords with explicit language tags."""
     return [
         {str(lang): str(keyword_obj)}
