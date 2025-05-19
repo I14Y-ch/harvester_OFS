@@ -237,7 +237,7 @@ def normalize_text(text):
     return normalized_text.lower().strip()
 
 
-def get_multilingual_keywords(graph: Graph, subject: URIRef, predicate: URIRef) -> List[Dict]:
+def get_multilingual_keywords(graph, subject: URIRef, predicate: URIRef) -> List[Dict]:
     """Retrieves only keywords with explicit language tags."""
     return [
         {str(lang): str(keyword_obj)}
