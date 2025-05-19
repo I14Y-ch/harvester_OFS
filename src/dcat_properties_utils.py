@@ -237,22 +237,14 @@ def normalize_text(text):
     return normalized_text.lower().strip()
 
 
-def get_multilingual_keywords(graph, subject, predicate):
-    """Retrieves only keywords with explicit language tags"""
-    keywords = []
-    
-    for keyword_obj in graph.objects(subject, predicate):
-        if keyword_obj is None:
-            continue
-            
-        lang = getattr(keyword_obj, 'language', None)
-        if lang:  
-            keywords.append({
-                "cultureCode": lang,
-                "text": str(keyword_obj)
-            })
-    
-    return keywords
+def get_multilingual_keywords(graph: Graph, subject: URIRef, predicate: URIRef) -> List[Dict]:
+    """Retrieves only keywords with explicit language tags."""
+    return [
+        {str(lang): str(keyword_obj)}
+        for keyword_obj in graph.objects(subject, predicate)
+        if keyword_obj is not None and (lang := getattr(keyword_obj, 'language', None))
+    ]
+
 
 def get_media_type(media_type_uri: str) -> str:
     """Returns the media type code if it's a valid URI or direct code."""
