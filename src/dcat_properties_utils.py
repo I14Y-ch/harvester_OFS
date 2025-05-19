@@ -2,6 +2,7 @@ from datetime import datetime
 from config import *
 from rdflib import URIRef, Literal, Graph
 from rdflib.namespace import DCTERMS, FOAF, RDFS, DCAT, RDF
+from typing import List, Dict
 from rdflib import Namespace
 import unicodedata
 from mappings import *
