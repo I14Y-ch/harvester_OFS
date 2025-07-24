@@ -285,23 +285,24 @@ def main():
     
     deleted_datasets = []
     for identifier in datasets_to_delete:
-        try:
-            dataset_id = previous_ids[identifier]['id']
-            headers = {
-                "Authorization": API_TOKEN,
-                "Content-Type": "application/json"
-            }
-            url = f"{API_BASE_URL}/datasets/{dataset_id}"
-            response = requests.delete(url, headers=headers, verify=False)
+        print(identifier)
+        # try:
+        #     dataset_id = previous_ids[identifier]['id']
+        #     headers = {
+        #         "Authorization": API_TOKEN,
+        #         "Content-Type": "application/json"
+        #     }
+        #     url = f"{API_BASE_URL}/datasets/{dataset_id}"
+        #     response = requests.delete(url, headers=headers, verify=False)
             
-            if response.status_code in [200, 204]:
-                deleted_datasets.append(identifier)
-                del previous_ids[identifier]
-                print(f"Successfully deleted dataset: {identifier}")
-            else:
-                print(f"Failed to delete dataset {identifier}: {response.status_code} - {response.text}")
-        except Exception as e:
-            print(f"Error deleting dataset {identifier}: {str(e)}")
+        #     if response.status_code in [200, 204]:
+        #         deleted_datasets.append(identifier)
+        #         del previous_ids[identifier]
+        #         print(f"Successfully deleted dataset: {identifier}")
+        #     else:
+        #         print(f"Failed to delete dataset {identifier}: {response.status_code} - {response.text}")
+        # except Exception as e:
+        #     print(f"Error deleting dataset {identifier}: {str(e)}")
     
     #        Code to do a manual update of all datasets
     # for dataset in datasets:
