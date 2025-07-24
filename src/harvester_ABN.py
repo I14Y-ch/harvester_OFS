@@ -291,7 +291,7 @@ def main():
                 "Authorization": API_TOKEN,
                 "Content-Type": "application/json"
             }
-             try:
+            try:
                 change_level_i14y(dataset_id, 'Internal', API_TOKEN)
                 print(f"Changed publication level to Internal for {identifier}")
                 time.sleep(0.5)  # Small delay to ensure the change propagates
