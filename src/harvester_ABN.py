@@ -234,6 +234,8 @@ def main():
     
     print("\nStarting dataset import...\n")
     
+    current_source_identifiers = {dataset['identifiers'][0] for dataset in datasets}
+    
     for dataset in datasets:
         identifier = dataset['identifiers'][0]
         print(f"\nProcessing dataset: {identifier}")
@@ -278,6 +280,28 @@ def main():
         except Exception as e:
             print(f"Error processing dataset {identifier}: {str(e)}\n")
 
+        # Find datasets that exist in previous_ids but not in current source
+    datasets_to_delete = set(previous_ids.keys()) - current_source_identifiers
+    
+    deleted_datasets = []
+    for identifier in datasets_to_delete:
+        try:
+            dataset_id = previous_ids[identifier]['id']
+            headers = {
+                "Authorization": API_TOKEN,
+                "Content-Type": "application/json"
+            }
+            url = f"{API_BASE_URL}/datasets/{dataset_id}"
+            response = requests.delete(url, headers=headers, verify=False)
+            
+            if response.status_code in [200, 204]:
+                deleted_datasets.append(identifier)
+                del previous_ids[identifier]
+                print(f"Successfully deleted dataset: {identifier}")
+            else:
+                print(f"Failed to delete dataset {identifier}: {response.status_code} - {response.text}")
+        except Exception as e:
+            print(f"Error deleting dataset {identifier}: {str(e)}")
     
     #        Code to do a manual update of all datasets
     # for dataset in datasets:
@@ -327,6 +351,9 @@ def main():
     log += "\nUnchanged datasets:\n"
     for item in unchanged_datasets:
         log += f"\n- {item}"
+    log += "\nDeleted datasets:\n"
+    for item in deleted_datasets:
+        log += f"\n- {item}"
 
     # Save log in root directory
     log_path = os.path.join(workspace, 'harvest_log.txt')
@@ -339,6 +366,7 @@ def main():
     print(f"Created: {len(created_datasets)}")
     print(f"Updated: {len(updated_datasets)}")
     print(f"Unchanged: {len(unchanged_datasets)}")
+    print(f"Deleted: {len(deleted_datasets)}")
     print(f"Log saved to: {log_path}")
 
 if __name__ == "__main__":
