@@ -285,7 +285,7 @@ def main():
     
     deleted_datasets = []
     for identifier in datasets_to_delete:
-        print(identifier)
+        print("DELETED" + identifier)
         # try:
         #     dataset_id = previous_ids[identifier]['id']
         #     headers = {
