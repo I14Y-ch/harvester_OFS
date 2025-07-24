@@ -16,3 +16,9 @@ For each agent:
 - It can also be triggered or disabled manually from the Actions tab.
 - After each run, a log file is generated and uploaded as an artifact, which can be downloaded from the Actions tab.
 
+## Filters logic
+We do not harvest: 
+
+- datasets without description
+- datasets without distributions
+- PDF distributions
