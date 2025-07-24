@@ -291,6 +291,13 @@ def main():
                 "Authorization": API_TOKEN,
                 "Content-Type": "application/json"
             }
+             try:
+                change_level_i14y(dataset_id, 'Internal', API_TOKEN)
+                print(f"Changed publication level to Internal for {identifier}")
+                time.sleep(0.5)  # Small delay to ensure the change propagates
+            except Exception as e:
+                print(f"Error changing publication level for {identifier}: {str(e)}")
+                continue  # Skip deletion if we can't change the level
             url = f"{API_BASE_URL}/datasets/{dataset_id}"
             response = requests.delete(url, headers=headers, verify=False)
             
