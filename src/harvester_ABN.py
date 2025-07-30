@@ -65,46 +65,6 @@ def fetch_datasets_from_api() -> List[Dict]:
     
     print(f"Total datasets retrieved: {len(all_datasets)}")
     return all_datasets
-    
-# def fetch_datasets_from_api() -> List[Dict]:
-#     """Fetches a single test dataset from API for testing purposes"""
-#     datasets = []
-#     try:
-#         params = {"skip": 0, "limit": 100}
-#         response = requests.get(
-#             API_OFS_URL,
-#             params=params,
-#             #proxies=PROXIES,
-#             verify=False,
-#             timeout=30
-#         )
-        
-#         if response.status_code != 200:
-#             print(f"Error: Received status code {response.status_code}")
-#             return datasets
-            
-#         if not response.text.strip():
-#             print("Received empty response")
-#             return datasets
-
-#         graph = Graph()
-#         graph.parse(data=response.text, format='xml')
-
-#         for dataset_uri in list(graph.subjects(RDF.type, DCAT.Dataset))[:30]:
-#             print(f"Processing test dataset URI: {dataset_uri}")
-#             dataset = extract_dataset(graph, dataset_uri)
-            
-#             if dataset and isinstance(dataset, dict):
-#                 datasets.append(dataset)
-#                 print("Successfully processed 1 test dataset")
-#             else:
-#                 print(f"Skipping invalid test dataset: {dataset_uri}")
-                
-#     except Exception as e:
-#         print(f"Error during test request: {e}")
-    
-#     return datasets
-
 
 def parse_rdf_file(file_path):
     """Parses an RDF file and extracts datasets with valid distributions."""
