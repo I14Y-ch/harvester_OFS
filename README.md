@@ -1,4 +1,4 @@
-# I14Y Harvester Documentation - OGD Statistical Federal Office (ABN)
+# I14Y Harvester - OGD Statistical Federal Office (ABN)
 
 The harvesting of the OGD Statistical Federal Office catalogue was done via Github actions in ABN. Synchronisation takes place automatically every day at midnight. Synchronisation can also be triggered manually if necessary. A log file is saved after each synchronisation.
 
