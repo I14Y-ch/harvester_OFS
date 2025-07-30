@@ -36,6 +36,7 @@ jobs:
       env:
         CLIENT_ID: ${{ secrets.CLIENT_ID }}
         CLIENT_SECRET: ${{ secrets.CLIENT_SECRET }}
+        ORGANIZATION_ID: ${{ secrets.ORGANIZATION_ID }}
       run: |
         python - <<EOF
         import requests
