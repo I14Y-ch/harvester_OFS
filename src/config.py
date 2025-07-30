@@ -10,7 +10,7 @@ API_TOKEN = f"{os.environ['ACCESS_TOKEN']}"
 #IDS_I14Y = json.loads(os.environ['IDS_I14Y'])
 
 # Organization settings
-ORGANIZATION_ID =  os.getenv("ORGANIZATION_ID")
+ORGANIZATION_ID =  "CH1"
 DEFAULT_PUBLISHER = {
     "identifier": ORGANIZATION_ID
 }
