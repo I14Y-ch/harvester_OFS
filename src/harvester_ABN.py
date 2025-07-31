@@ -152,60 +152,50 @@ def main():
     updated_datasets = []
     unchanged_datasets = []
     
-    print("Fetching first 3 datasets from API...")
-    datasets = fetch_three_datasets_from_api()
+    print("Fetching datasets from API...")
+    datasets = fetch_datasets_from_api()  # Get all datasets
     
-    print("\nStarting dataset import...\n")
+    print("\nStarting dataset import (FORCING UPDATE OF ALL DATASETS)...\n")
     
     current_source_identifiers = {dataset['identifiers'][0] for dataset in datasets}
     
-    for dataset in datasets[:3]:  # Process only the first 3 datasets
+    for dataset in datasets:
         identifier = dataset['identifiers'][0]
         print(f"\nProcessing dataset: {identifier}")
         print(f"Issued date: {dataset.get('issued')}")
         print(f"Modified date: {dataset.get('modified')}")
 
-        modified_date = parse_date(dataset.get('modified'))
-        created_date = parse_date(dataset.get('issued', dataset.get('modified')))
-
         try:
-            is_new_dataset = identifier not in previous_ids
-            is_updated_dataset = modified_date and modified_date > yesterday
+            # FORCE UPDATE ALL DATASETS REGARDLESS OF MODIFICATION DATE
+            action = "updated" if identifier in previous_ids else "created"
+            print(f"FORCED {action.capitalize()} dataset: {identifier}")
 
-            if is_new_dataset or is_updated_dataset:
-                action = "created" if is_new_dataset else "updated"
-                print(f"{action.capitalize()} dataset detected: {identifier}")
+            payload = create_dataset_payload(dataset)
+            response_id, action = submit_to_api(payload, identifier, previous_ids)
+            response_id = response_id.strip('"')
 
-                payload = create_dataset_payload(dataset)
-                response_id, action = submit_to_api(payload, identifier, previous_ids)
-                response_id = response_id.strip('"')
+            if action == "created":
+                created_datasets.append(identifier)
+                previous_ids[identifier] = {'id': response_id} 
 
-                if action == "created":
-                    created_datasets.append(identifier)
-                    previous_ids[identifier] = {'id': response_id} 
+                try:
+                    change_level_i14y(response_id, 'Public', API_TOKEN)  
+                    time.sleep(0.5)
+                    change_status_i14y(response_id, 'Recorded', API_TOKEN)
+                    print(f"Set i14y level to Public and status to Registered for {identifier}")
+                except Exception as e:
+                    print(f"Error setting i14y level/status for {identifier}: {str(e)}")
+            elif action == "updated":
+                updated_datasets.append(identifier)
 
-                    try:
-                        change_level_i14y(response_id, 'Public', API_TOKEN)  
-                        time.sleep(0.5)
-                        change_status_i14y(response_id, 'Recorded', API_TOKEN)
-                        print(f"Set i14y level to Public and status to Registered for {identifier}")
-                    except Exception as e:
-                        print(f"Error setting i14y level/status for {identifier}: {str(e)}")
-                elif action == "updated":
-                    updated_datasets.append(identifier)
+            # Process PX structures after successful dataset creation/update
+            for distribution in dataset.get("distributions", []):
+                if structure_importer.process_px_distribution(distribution, response_id):
+                    print(f"Successfully processed structure for distribution in dataset {identifier}")
+                else:
+                    print(f"No PX structure found or error processing structure for dataset {identifier}")
 
-                # Process PX structures after successful dataset creation/update
-                for distribution in dataset.get("distributions", []):
-                    if structure_importer.process_px_distribution(distribution, response_id):
-                        print(f"Successfully processed structure for distribution in dataset {identifier}")
-                    else:
-                        print(f"No PX structure found or error processing structure for dataset {identifier}")
-
-                print(f"Success - Dataset {action}: {response_id}\n")
-
-            else:
-                unchanged_datasets.append(identifier)
-                print(f"No changes detected for dataset: {identifier}\n")
+            print(f"Success - Dataset {action}: {response_id}\n")
 
         except Exception as e:
             print(f"Error processing dataset {identifier}: {str(e)}\n")
@@ -216,7 +206,7 @@ def main():
         json.dump(previous_ids, f)
 
     # Create log
-    log = f"Harvest completed successfully at {datetime.datetime.now()}\n"
+    log = f"FORCED UPDATE completed at {datetime.datetime.now()}\n"
     log += "Created datasets:\n"
     for item in created_datasets:
         log += f"\n- {item}"
@@ -232,7 +222,7 @@ def main():
     with open(log_path, 'w') as f:
         f.write(log)
     
-    print("\n=== Import Summary ===")
+    print("\n=== FORCED UPDATE Summary ===")
     print(f"Total processed: {len(datasets)}")
     print(f"Created: {len(created_datasets)}")
     print(f"Updated: {len(updated_datasets)}")
