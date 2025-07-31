@@ -314,11 +314,29 @@ class StructureImporter:
 
     def process_px_distribution(self, distribution: Dict, dataset_id: str) -> bool:
         """Processes a distribution to extract PX structure if available"""
-        access_url = distribution.get("accessUrl", {}).get("uri") or distribution.get("downloadUrl", {}).get("uri")
+        # Safely get format and mediaType with default values
+        format_str = str(distribution.get('format', '')).lower()
+        media_type = str(distribution.get('mediaType', '')).lower()
+        
+        # Check if this is a PX distribution
+        is_px = ('px' in format_str) or ('application/x-px' in media_type)
+        if not is_px:
+            return False
+            
+        # Get access URL safely
+        access_url = None
+        if isinstance(distribution.get('accessUrl'), dict):
+            access_url = distribution['accessUrl'].get('uri')
+        elif isinstance(distribution.get('downloadUrl'), dict):
+            access_url = distribution['downloadUrl'].get('uri')
+        else:
+            access_url = distribution.get('accessUrl') or distribution.get('downloadUrl')
+        
         if not access_url:
             return False
             
-        identifier = self.extract_px_identifier(access_url)
+        # Extract identifier and process
+        identifier = self.extract_px_identifier(str(access_url))
         if not identifier:
             return False
             
