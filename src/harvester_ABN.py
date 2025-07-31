@@ -206,7 +206,7 @@ def main():
                     if not processed_structure:
                         print(f"No PX structure found or error processing structure for dataset {identifier}")
 
-                print(f"Success - Dataset {action}: {response_id}\n")
+            print(f"Success - Dataset {action}: {response_id}\n")
 
         except Exception as e:
             print(f"Error processing dataset {identifier}: {str(e)}\n")
