@@ -3,7 +3,7 @@ from config import *
 from dcat_properties_utils import *
 from rdflib import Graph
 from rdflib.namespace import DCAT, RDF
-from structure_import import StructureImporter
+from structure import StructureImporter
 import json
 import os
 from dateutil import parser
