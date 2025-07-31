@@ -297,7 +297,7 @@ class StructureImporter:
             "Content-Type": "text/turtle"
         }
         
-        url = f"https://api-a.i14y.admin.ch/api/partner/v1/datasets/{dataset_id}structures/imports"
+        url = f"https://api-a.i14y.admin.ch/api/partner/v1/datasets/{dataset_id}/structures/imports"
         
         try:
             response = requests.post(
@@ -350,8 +350,10 @@ class StructureImporter:
                 return True
         
         return False
+        
     def process_px_distribution(self, distribution: Dict, dataset_id: str) -> bool:
         """Processes a distribution to extract PX structure if available"""
+        print(f"Processing PX distribution for dataset ID: {dataset_id}") 
         # First check if this looks like a PX distribution
         if not self.is_px_distribution(distribution):
             return False
