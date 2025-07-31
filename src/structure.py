@@ -312,15 +312,48 @@ class StructureImporter:
             print(f"Error uploading structure for dataset {dataset_id}: {str(e)}")
             return False
 
+    def is_px_distribution(distribution: dict) -> bool:
+        """
+        Checks if a distribution is a valid PX file based on its access URL pattern.
+        
+        Args:
+            distribution: A dictionary containing distribution metadata
+            
+        Returns:
+            bool: True if the distribution appears to be a PX file, False otherwise
+        """
+        # Get the access URL from different possible locations in the distribution
+        access_url = None
+        if isinstance(distribution.get('accessUrl'), dict):
+            access_url = distribution['accessUrl'].get('uri')
+        elif isinstance(distribution.get('downloadUrl'), dict):
+            access_url = distribution['downloadUrl'].get('uri')
+        else:
+            access_url = distribution.get('accessUrl') or distribution.get('downloadUrl')
+        
+        if not access_url or not isinstance(access_url, str):
+            return False
+        
+        # Normalize the URL by removing query parameters and fragments
+        clean_url = access_url.split('?')[0].split('#')[0]
+        
+        # Check for PX patterns in the URL
+        px_patterns = [
+            r'px-x-\d+_\d+$',                     # Example: px-x-1304030000_301
+            r'px-x-\d+_\d+\.px$',                 # Example: px-x-1103020200_101.px
+            r'/[^/]*px-x-\d+_\d+[^/]*$',          # In path segments
+        ]
+        
+        # Check all patterns
+        for pattern in px_patterns:
+            if re.search(pattern, clean_url, re.IGNORECASE):
+                return True
+        
+        return False
     def process_px_distribution(self, distribution: Dict, dataset_id: str) -> bool:
         """Processes a distribution to extract PX structure if available"""
-        # Safely get format and mediaType with default values
-        format_str = str(distribution.get('format', '')).lower()
-        media_type = str(distribution.get('mediaType', '')).lower()
-        
-        # Check if this is a PX distribution
-        is_px = ('px' in format_str) or ('application/x-px' in media_type)
-        if not is_px:
+        # First check if this looks like a PX distribution
+        if not is_px_distribution(distribution):
             return False
             
         # Get access URL safely
@@ -335,8 +368,8 @@ class StructureImporter:
         if not access_url:
             return False
             
-        # Extract identifier and process
-        identifier = self.extract_px_identifier(str(access_url))
+        # Extract identifier
+        identifier = self.extract_px_identifier(access_url)
         if not identifier:
             return False
             
