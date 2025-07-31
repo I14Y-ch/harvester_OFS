@@ -189,13 +189,24 @@ def main():
                 updated_datasets.append(identifier)
 
             # Process PX structures after successful dataset creation/update
-            for distribution in dataset.get("distributions", []):
-                if structure_importer.process_px_distribution(distribution, response_id):
-                    print(f"Successfully processed structure for distribution in dataset {identifier}")
-                else:
-                    print(f"No PX structure found or error processing structure for dataset {identifier}")
+            if 'distributions' in dataset:
+                    print("Checking for PX distributions...")
+                    processed_structure = False
+                    
+                    for distribution in dataset['distributions']:
+                        if distribution.get('format') == 'px' or \
+                           any(ext in distribution.get('mediaType', '').lower() 
+                              for ext in ['px', 'application/x-px']):
+                            print(f"Found PX distribution: {distribution.get('title')}")
+                            if structure_importer.process_px_distribution(distribution, response_id):
+                                print(f"Successfully processed structure for {identifier}")
+                                processed_structure = True
+                                break  # Stop after first successful PX processing
+                    
+                    if not processed_structure:
+                        print(f"No PX structure found or error processing structure for dataset {identifier}")
 
-            print(f"Success - Dataset {action}: {response_id}\n")
+                print(f"Success - Dataset {action}: {response_id}\n")
 
         except Exception as e:
             print(f"Error processing dataset {identifier}: {str(e)}\n")
