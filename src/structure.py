@@ -312,7 +312,7 @@ class StructureImporter:
             print(f"Error uploading structure for dataset {dataset_id}: {str(e)}")
             return False
 
-    def is_px_distribution(distribution: dict) -> bool:
+    def is_px_distribution(self, distribution: dict) -> bool:
         """
         Checks if a distribution is a valid PX file based on its access URL pattern.
         
@@ -350,7 +350,6 @@ class StructureImporter:
                 return True
         
         return False
-        
     def process_px_distribution(self, distribution: Dict, dataset_id: str) -> bool:
         """Processes a distribution to extract PX structure if available"""
         # First check if this looks like a PX distribution
