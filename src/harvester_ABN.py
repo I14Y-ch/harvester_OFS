@@ -105,14 +105,10 @@ def submit_to_api(payload, identifier=None, previous_ids=None):
     }
 
     action = "created"
-    if identifier and previous_ids and identifier in previous_ids:
-        dataset_id = previous_ids[identifier]['id']
-        url = f"{API_BASE_URL}/datasets/{dataset_id}"
-        response = requests.put(url, json=payload, headers=headers, verify=False)
-        action = "updated"
-    else:
-        url = f"{API_BASE_URL}/datasets"
-        response = requests.post(url, json=payload, headers=headers, verify=False)
+    dataset_id = previous_ids[identifier]['id']
+    url = f"{API_BASE_URL}/datasets/{dataset_id}"
+    response = requests.put(url, json=payload, headers=headers, verify=False)
+    action = "updated"
     
     if response.status_code not in [200, 201, 204]:
         raise Exception(f"API error: {response.status_code} - {response.text}")
