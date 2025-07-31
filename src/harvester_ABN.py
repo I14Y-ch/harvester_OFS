@@ -3,6 +3,7 @@ from config import *
 from dcat_properties_utils import *
 from rdflib import Graph
 from rdflib.namespace import DCAT, RDF
+from structure import StructureImporter
 import json
 import os
 from dateutil import parser
@@ -232,6 +233,22 @@ def main():
                     updated_datasets.append(identifier)
 
                 print(f"Success - Dataset {action}: {response_id}\n")
+                structure_importer = StructureImporter(API_TOKEN)
+                # Process PX structures after successful dataset creation/update
+                for distribution in dataset.get("distributions", []):
+                    if structure_importer.process_px_distribution(distribution, response_id):
+                        print(f"Successfully processed structure for distribution in dataset {identifier}")
+                    else:
+                        print(f"No PX structure found or error processing structure for dataset {identifier}")
+
+                print(f"Success - Dataset {action}: {response_id}\n")
+
+            else:
+                unchanged_datasets.append(identifier)
+                print(f"No changes detected for dataset: {identifier}\n")
+
+        except Exception as e:
+            print(f"Error processing dataset {identifier}: {str(e)}\n")
 
             else:
                 unchanged_datasets.append(identifier)
