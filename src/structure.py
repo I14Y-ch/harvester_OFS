@@ -350,10 +350,11 @@ class StructureImporter:
                 return True
         
         return False
+        
     def process_px_distribution(self, distribution: Dict, dataset_id: str) -> bool:
         """Processes a distribution to extract PX structure if available"""
         # First check if this looks like a PX distribution
-        if not is_px_distribution(distribution):
+        if not self.is_px_distribution(distribution):
             return False
             
         # Get access URL safely
