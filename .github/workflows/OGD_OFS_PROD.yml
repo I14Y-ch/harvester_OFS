@@ -1,4 +1,4 @@
-name: I14Y Harvester OGD Office Fédéral de Statistique catalogue PROD
+name: PROD - I14Y Harvester OGD Office Fédéral de Statistique catalogue 
 
 on:
   schedule:
@@ -81,4 +81,5 @@ jobs:
         name: dataset_ids
         path: OGD_OFS_PROD/data/dataset_ids.json
         retention-days: 2
+
 
