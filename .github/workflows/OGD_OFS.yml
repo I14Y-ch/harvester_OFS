@@ -1,4 +1,4 @@
-name: I14Y Harvester OGD Office Fédéral de Statistique catalogue ABN
+name: ABN-I14Y Harvester OGD Office Fédéral de Statistique catalogue 
 
 on:
   schedule:
