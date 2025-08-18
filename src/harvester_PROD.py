@@ -24,7 +24,7 @@ def fetch_datasets_from_api() -> List[Dict]:
         try:
             params = {"skip": skip, "limit": limit}
             response = requests.get(
-                API_OFS_URL_PROD,
+                API_OFS_URL,
                 params=params,
                 #proxies=PROXIES,
                 verify=False,

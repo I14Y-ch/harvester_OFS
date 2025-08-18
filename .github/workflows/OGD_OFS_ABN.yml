@@ -18,10 +18,10 @@ jobs:
       continue-on-error: true
       with:
           name: dataset_ids
-          workflow: OGD_OFS.yml
+          workflow: OGD_OFS_ABN.yml
           workflow_conclusion: success
           if_no_artifact_found: warn
-          path: OGD_OFS/data
+          path: OGD_OFS_ABN/data
         
     - name: Set up Python
       uses: actions/setup-python@v5
@@ -34,9 +34,8 @@ jobs:
     - name: Get access token
       id: get-token
       env:
-        CLIENT_ID: ${{ secrets.CLIENT_ID }}
-        CLIENT_SECRET: ${{ secrets.CLIENT_SECRET }}
-        ORGANIZATION_ID: ${{ secrets.ORGANIZATION_ID }}
+        CLIENT_ID_ABN: ${{ secrets.CLIENT_ID_ABN }}
+        CLIENT_SECRET_ABN: ${{ secrets.CLIENT_SECRET_ABN }}
       run: |
         python - <<EOF
         import requests
@@ -54,8 +53,8 @@ jobs:
               raise Exception("Failed to get token")
             return response.json()
     
-        client_id = os.environ['CLIENT_ID']
-        client_secret = os.environ['CLIENT_SECRET']
+        client_id = os.environ['CLIENT_ID_ABN']
+        client_secret = os.environ['CLIENT_SECRET_ABN']
         response = get_access_token(client_id, client_secret)
         if 'access_token' not in response:
             raise Exception("Failed to get access token: " + str(response))
@@ -80,5 +79,5 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: dataset_ids
-        path: OGD_OFS/data/dataset_ids.json
+        path: OGD_OFS_ABN/data/dataset_ids.json
         retention-days: 2

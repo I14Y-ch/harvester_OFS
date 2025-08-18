@@ -94,7 +94,7 @@ def create_dataset_payload(dataset):
 def change_level_i14y(id, level, token):
     """Change publication level of a dataset in i14y"""
     response = requests.put(
-        url=f"{API_BASE_URL}/datasets/{id}/publication-level",
+        url=f"{API_BASE_URL_ABN}/datasets/{id}/publication-level",
         params={'level': level}, 
         headers={
             'Authorization': token, 
@@ -112,7 +112,7 @@ def change_level_i14y(id, level, token):
 def change_status_i14y(id, status, token):
     """Change registration status of a dataset in i14y"""
     response = requests.put(
-        url=f"{API_BASE_URL}/datasets/{id}/registration-status",
+        url=f"{API_BASE_URL_ABN}/datasets/{id}/registration-status",
         params={'status': status}, 
         headers={
             'Authorization': token, 
@@ -137,11 +137,11 @@ def submit_to_api(payload, identifier=None, previous_ids=None):
     action = "created"
     if identifier and previous_ids and identifier in previous_ids:
         dataset_id = previous_ids[identifier]['id']
-        url = f"{API_BASE_URL}/datasets/{dataset_id}"
+        url = f"{API_BASE_URL_ABN}/datasets/{dataset_id}"
         response = requests.put(url, json=payload, headers=headers, verify=False)
         action = "updated"
     else:
-        url = f"{API_BASE_URL}/datasets"
+        url = f"{API_BASE_URL_ABN}/datasets"
         response = requests.post(url, json=payload, headers=headers, verify=False)
     
     if response.status_code not in [200, 201, 204]:
@@ -258,7 +258,7 @@ def main():
             except Exception as e:
                 print(f"Error changing publication level for {identifier}: {str(e)}")
                 continue  # Skip deletion if we can't change the level
-            url = f"{API_BASE_URL}/datasets/{dataset_id}"
+            url = f"{API_BASE_URL_ABN}/datasets/{dataset_id}"
             response = requests.delete(url, headers=headers, verify=False)
             
             if response.status_code in [200, 204]:

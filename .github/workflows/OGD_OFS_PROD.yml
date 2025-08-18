@@ -1,0 +1,83 @@
+# name: I14Y Harvester OGD Office Fédéral de Statistique catalogue PROD
+
+# on:
+#   schedule:
+#     - cron: '0 0 * * *'  # Runs every day at midnight
+#   workflow_dispatch:  # Allows manual triggering
+
+# jobs:
+#   harvest-data:
+#     runs-on: ubuntu-latest
+
+#     steps:
+#     - name: Checkout repository
+#       uses: actions/checkout@v4
+
+#     - name: Download previous data
+#       uses: dawidd6/action-download-artifact@v4
+#       continue-on-error: true
+#       with:
+#           name: dataset_ids
+#           workflow: OGD_OFS_PROD.yml
+#           workflow_conclusion: success
+#           if_no_artifact_found: warn
+#           path: OGD_OFS_PROD/data
+        
+#     - name: Set up Python
+#       uses: actions/setup-python@v5
+#       with:
+#         python-version: '3.9'
+
+#     - name: Install dependencies
+#       run: pip install -r requirements.txt
+
+#     - name: Get access token
+#       id: get-token
+#       env:
+#         CLIENT_ID_PROD: ${{ secrets.CLIENT_ID_PROD }}
+#         CLIENT_SECRET_PROD: ${{ secrets.CLIENT_SECRET_PROD }}
+#       run: |
+#         python - <<EOF
+#         import requests
+#         import os
+    
+#         def get_access_token(client_key, client_key_secret):
+#             data = {'grant_type': 'client_credentials'}
+#             response = requests.post(
+#                 "https://identity-a.bit.admin.ch/realms/bfs-sis-a/protocol/openid-connect/token",
+#                 data=data,
+#                 verify=False,
+#                 auth=(client_key, client_key_secret)
+#             )
+#             if response.status_code >= 400:
+#               raise Exception("Failed to get token")
+#             return response.json()
+    
+#         client_id = os.environ['CLIENT_ID_PROD']
+#         client_secret = os.environ['CLIENT_SECRET_PROD']
+#         response = get_access_token(client_id, client_secret)
+#         if 'access_token' not in response:
+#             raise Exception("Failed to get access token: " + str(response))
+#         access_token = 'Bearer ' + response['access_token']
+        
+#         with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+#           f.write(f"access_token={access_token}\n")
+#         EOF
+        
+#     - name: Run harvester script
+#       env:
+#         ACCESS_TOKEN: ${{ steps.get-token.outputs.access_token }}
+#       run: python src/harvester_PROD.py
+    
+#     - name: Upload log
+#       uses: actions/upload-artifact@v4
+#       with:
+#         name: harvest-log
+#         path: harvest_log.txt
+
+#     - name: Upload updated data
+#       uses: actions/upload-artifact@v4
+#       with:
+#         name: dataset_ids
+#         path: OGD_OFS_PROD/data/dataset_ids.json
+#         retention-days: 2

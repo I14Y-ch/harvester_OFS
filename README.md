@@ -1,6 +1,6 @@
-# I14Y Harvester - OGD Statistical Federal Office (ABN)
+# I14Y Harvester - OGD Statistical Federal Office (ABN + PROD)
 
-The harvesting of the OGD Statistical Federal Office catalogue was done via Github actions in ABN. Synchronisation takes place automatically every day at midnight. Synchronisation can also be triggered manually if necessary. A log file is saved after each synchronisation.
+The harvesting of the OGD Statistical Federal Office catalogue is done via Github actions in ABN and PROD. Synchronisation takes place automatically every day at midnight. Synchronisation can also be triggered manually if necessary. A log file is saved after each synchronisation.
 
 ## Process Overview
 
@@ -25,7 +25,7 @@ In detail, the process works as follows:
       - PDF distribution is discarded  
       - At least one distribution per dataset
    - Creates proper API payload  
-   - Submits to I14Y API (`api-a.i14y.admin.ch`)  
+   - Submits to I14Y API (`api-a.i14y.admin.ch` for ABN, `api-a.i14y.admin.ch` for PROD)  
    - For new datasets, automatically sets:  
       - Status: "Recorded"
       - Level: "Public"  
@@ -42,5 +42,4 @@ In detail, the process works as follows:
    - List of created datasets  
    - List of updated datasets  
    - List of unchanged datasets  
-
-**Note**: All manipulations can be modified and adapted before the official harvesting on PROD.
+   - List of deleted datasets
