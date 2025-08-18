@@ -18,10 +18,10 @@ jobs:
       continue-on-error: true
       with:
           name: dataset_ids
-          workflow: OGD_OFS_ABN.yml
+          workflow: OGD_OFS.yml
           workflow_conclusion: success
           if_no_artifact_found: warn
-          path: OGD_OFS_ABN/data
+          path: OGD_OFS/data
         
     - name: Set up Python
       uses: actions/setup-python@v5
@@ -79,5 +79,5 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: dataset_ids
-        path: OGD_OFS_ABN/data/dataset_ids.json
+        path: OGD_OFS/data/dataset_ids.json
         retention-days: 2
