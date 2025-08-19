@@ -31,37 +31,44 @@ jobs:
     - name: Install dependencies
       run: pip install -r requirements.txt
 
-    - name: Get access token
+    - name: Get access token (debug)
       id: get-token
       env:
         CLIENT_ID_PROD: ${{ secrets.CLIENT_ID_PROD }}
         CLIENT_SECRET_PROD: ${{ secrets.CLIENT_SECRET_PROD }}
       run: |
         python - <<EOF
-        import requests
-        import os
+        import requests, os, sys
+        from urllib3.exceptions import InsecureRequestWarning
+        requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
     
-        def get_access_token(client_key, client_key_secret):
-            data = {'grant_type': 'client_credentials'}
+        def debug_request(response):
+            print(f"Status: {response.status_code}")
+            print(f"Headers: {response.headers}")
+            print(f"Body: {response.text[:200]}...")
+    
+        try:
             response = requests.post(
                 "https://identity.bit.admin.ch/realms/bfs-sis/protocol/openid-connect/token",
-                data=data,
+                data={'grant_type': 'client_credentials'},
+                auth=(os.environ['CLIENT_ID_PROD'], os.environ['CLIENT_SECRET_PROD']),
                 verify=False,
-                auth=(client_key, client_key_secret)
+                timeout=10
             )
-            if response.status_code >= 400:
-              raise Exception("Failed to get token")
-            return response.json()
-    
-        client_id_prod = os.environ['CLIENT_ID_PROD']
-        client_secret_prod = os.environ['CLIENT_SECRET_PROD']
-        response = get_access_token(client_id_prod, client_secret_prod)
-        if 'access_token' not in response:
-            raise Exception("Failed to get access token: " + str(response))
-        access_token = 'Bearer ' + response['access_token']
-        
-        with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
-          f.write(f"access_token={access_token}\n")
+            
+            debug_request(response)  # Print debug info
+            response.raise_for_status()
+            
+            token = response.json().get('access_token')
+            if not token:
+                raise ValueError("No access_token in response")
+                
+            with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+                f.write(f"access_token=Bearer {token}\n")
+                
+        except Exception as e:
+            print(f"::error::Token request failed: {str(e)}")
+            sys.exit(1)
         EOF
         
     - name: Run harvester script
@@ -81,6 +88,7 @@ jobs:
         name: dataset_ids
         path: OGD_OFS_PROD/data/dataset_ids.json
         retention-days: 2
+
 
 
 
