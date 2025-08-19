@@ -49,7 +49,7 @@ jobs:
     
         try:
             response = requests.post(
-                "https://identity.bit.admin.ch/realms/bfs-sis/protocol/openid-connect/token",
+                "https://identity.bit.admin.ch/realms/bfs-sis-p/protocol/openid-connect/token",
                 data={'grant_type': 'client_credentials'},
                 auth=(os.environ['CLIENT_ID_PROD'], os.environ['CLIENT_SECRET_PROD']),
                 verify=False,
@@ -88,6 +88,7 @@ jobs:
         name: dataset_ids
         path: OGD_OFS_PROD/data/dataset_ids.json
         retention-days: 2
+
 
 
 
