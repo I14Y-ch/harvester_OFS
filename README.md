@@ -2,6 +2,61 @@
 
 The harvesting of the OGD Statistical Federal Office catalogue is done via Github actions in ABN and PROD. Synchronisation takes place automatically every day at midnight. Synchronisation can also be triggered manually if necessary. A log file is saved after each synchronisation.
 
+## Features
+- Import DCAT datasets from xml/rdf or ttl files to I14Y API
+- Supported properties for dcat.Dataset:
+  
+| Property | Requirement level | 
+| ----| ---- | 
+| __dct:title__ | mandatory |
+| __dct:description__ | mandatory | 
+| __dct:accessRight__ (chosen from:  [PUBLIC, NON_PUBLIC, CONFIDENTIAL, RESTRICTED](http://publications.europa.eu/resource/authority/access-right)) | mandatory | 
+| __dct:publisher__ (stated in config.py) | mandatory |
+| __dct:identifier__ | mandatory |
+| __dct:issued__ | optional |
+| __dct:modified__ | optional |
+| __dcat:landingPage__ | optional |
+| __dcat:keyword__ | optional |
+| __dct:language__ | optional |
+| __dcat:contactPoint__ | optional |
+| __documentation (foaf:page)__ | optional |
+| __schema:image__ | optional |
+| __dct:temporal__ | optional |
+| __dcat:temporalResolution__ | optional |
+| __frequency (dct:accrualPeriodicity)__ | optional |
+| __dct:isReferencedBy__ | optional |
+| __dct:relation__ | optional |
+| __spatial/geographical coverage (dct:spatial)__ | optional |
+| __dct:conformsTo__ | optional |
+| __dcat:theme__ | optional |
+| __dcat:version__ | optional |
+| __adms:versionNotes__ | optional |
+
+
+prov.qualifiedAttribution and prov.qualifiedRelation are not supported automatically, you can add those informations manually on I14Y. 
+
+- Supported properties for dcat.Distribution:
+  
+| Property | Requirement level | 
+| ----| ---- | 
+| __dct:title__ (if not stated, set automatically to 'Datenexport') | mandatory |
+| __dct:description__ (if not stated, set automatically to 'Export der Daten') | mandatory |
+| __dcat:accessURL__ | mandatory |
+| __dcat:downloadURL__ | optional |
+| __dct:license__ |optional |
+| __dct:issued__ | optional |
+| __dct:modified__ | optional |
+| __dct:rights__ | optional |
+| __dct:language__ | optional |
+| __schema:image__ | optional |
+| __dcat:spatialResolutionInMeters__ | optional |
+| __dcat:temporalResolution__ | optional | |
+| __dct:conformsTo__ | optional |
+| __dcat:mediaType__ | optional |
+| __dct:format__ | optional |
+| __dct:packageFormat__ | optional |
+| __spdx:checksum__ | optional |
+| __dcat:byteSize__ | optional |
 ## Process Overview
 
 In detail, the process works as follows:
