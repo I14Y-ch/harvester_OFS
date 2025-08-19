@@ -170,7 +170,7 @@ def parse_date(date_str):
 
 def main():
     workspace = os.getcwd()
-    path_to_data = os.path.join(workspace, 'OGD_OFS_PROD', 'data', 'dataset_ids.json')
+    path_to_data = os.path.join(workspace, 'OGD_OFS', 'data', 'dataset_ids.json')
     
     try: 
         with open(path_to_data, 'r') as f:
