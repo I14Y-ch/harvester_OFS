@@ -130,17 +130,32 @@ def get_existing_dataset_id(identifier):
             "Authorization": API_TOKEN,
             "Content-Type": "application/json"
         }
-        # Search for dataset by identifier - you may need to adjust this endpoint
-        # based on your API's search functionality
-        url = f"{API_BASE_URL}/datasets"
-        params = {"identifier": identifier}
+        
+        url = "https://api.i14y.admin.ch/api/partner/v1/datasets"
+        params = {
+            "datasetIdentifier": identifier,
+            "pubisherIdentifier": "CH1", 
+            "pageSize": 100  
+        }
         response = requests.get(url, headers=headers, params=params, verify=False)
+        
+        print(f"Searching for dataset {identifier} - Response: {response.status_code}")
         
         if response.status_code == 200:
             data = response.json()
-            if data and len(data) > 0:
-                # Assuming the API returns a list of datasets and we want the first match
-                return data[0].get('id')
+            
+            if isinstance(data, dict) and 'data' in data:
+                datasets = data['data']
+                if datasets and len(datasets) > 0:
+                    dataset_id = datasets[0].get('id')
+                    print(f"Found existing dataset: {identifier} -> {dataset_id}")
+                    return dataset_id
+                else:
+                    print(f"No datasets found for identifier: {identifier}")
+            else:
+                print(f"Unexpected API response structure: {type(data)}")
+        else:
+            print(f"API search failed with status {response.status_code}: {response.text}")
     except Exception as e:
         print(f"Error searching for existing dataset {identifier}: {e}")
     
@@ -211,11 +226,9 @@ def recover_existing_datasets(datasets, previous_ids):
     for dataset in datasets:
         identifier = dataset['identifiers'][0]
         
-        # Skip if we already have this dataset tracked
         if identifier in previous_ids:
             continue
             
-        # Try to find existing dataset in API
         existing_id = get_existing_dataset_id(identifier)
         if existing_id:
             previous_ids[identifier] = {'id': existing_id}
@@ -249,13 +262,7 @@ def main():
     workspace = os.getcwd()
     
     # Try multiple possible paths for the dataset_ids file
-    possible_paths = [
-        os.path.join(workspace, 'OGD_OFS', 'data', 'dataset_ids.json'),        # Main path
-        os.path.join(workspace, 'OGD_OFS_PROD', 'data', 'dataset_ids.json'),  # Alternative path
-        os.path.join(workspace, 'data', 'dataset_ids.json'),                  # Simple path
-        os.path.join(workspace, 'dataset_ids.json')                           # Root path
-    ]
-    
+    possible_paths =  [os.path.join(workspace, 'OGD_OFS', 'data', 'dataset_ids.json')]
     previous_ids = {}
     path_to_data = None
     
@@ -272,9 +279,9 @@ def main():
                 print(f"Error loading from {path}: {e}")
                 continue
     
-    # If no existing file found, use the primary path
+
     if path_to_data is None:
-        path_to_data = possible_paths[0]  # Use main path as default
+        path_to_data = possible_paths[0]  
         print("No previous data found, starting fresh")
     
     # Get yesterday's date in UTC+1
