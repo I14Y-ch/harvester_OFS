@@ -1,10 +1,19 @@
 # Structure Import 
+## Required Files
+
+```
+src/
+├── format_importers.py              # Format-specific importers
+├── structure_importer.py            # Main controller  
+└── .github/workflows/
+    └── structure_import.yml          # workflow
+```
 
 ## `format_importers.py`
- By separating format handling from the main process, you can easily add importer for JSON, XML, or any other format just by adding a new class to the importers file. The main controller and workflow never need to change.
+Contains importers for different file types. By separating format handling from the main process, you can easily add support for Excel, JSON, XML, or any other format by adding a new class. The main controller and workflow never need to change.
 
-- `PXImporter` - Reads PX files 
-- `CSVImporter` - Reads CSV files  
+- `PXImporter` - Reads PX files **TO ADJUST**
+- `CSVImporter` - Reads CSV files **TO ADJUST**
 - `IMPORTERS` registry - List of all available importers in the file
 
 How it works:
@@ -13,60 +22,50 @@ How it works:
 3. Extracts column names and types
 4. Returns standardized information
 
-## `structure_importer.py` - main process
-Manages the whole process
-1. Gets your dataset list
-2. For each dataset, finds files it can read
-3. Uses the right importer from `format_importers.py`
-4. Creates SHACL schema
-5. Uploads to i14y API
+## `structure_importer.py` - Main Controller
+managse the entire import process and reads harvest logs to determine which datasets need processing.
 
-Skips duplicate files (same PX file in different languages)
-
+Process flow:
+1. Reads harvest log to identify created/updated datasets
+2. For each dataset that changed:
+   - Fetches distributions from i14y API  
+   - Finds compatible importer from `format_importers.py`
+   - Deletes old structure (only for updates) 
+   - Creates new SHACL schema
+   - Uploads to i14y API
+3. Skips unchanged or deleted datasets and handles duplicate files automatically
 
 ## The Workflow
+Steps:
+1. Download dataset IDs and harvest log from harvester workflow
+2. Get API access token using secrets
+3. Run `structure_importer.py` 
+4. Upload execution log as artifact
 
-1. Download dataset IDs from your harvester
-2. Get API access token
-3. Run `structure_importer.py`
-4. Upload results log
-
-## How to Add New Formats
-
-Just add a new class to `format_importers.py`:
+## Adding New Formats
+Add a new class to `format_importers.py` following this pattern:
 
 ```python
 class ExcelImporter:
     def can_process(self, distribution):
         return '.xlsx' in distribution.get('accessUrl', '')
+   
+    def get_identifier(self, distribution):
+        return distribution.get('accessUrl', '').split('/')[-1]
     
     def download_and_parse(self, distribution):
-        # Read Excel file and return structure info
-        return {"identifier": "...", "properties": [...]}
+        # Download Excel file and analyze structure
+        return {
+            "identifier": "my_excel_file",
+            "title": {"en": "Excel Data"},
+            "description": {"en": "Structure from Excel file"},
+            "properties": [
+                {"name": "column1", "labels": {"en": "Column 1"}, "datatype": "string"}
+            ]
+        }
 
-# Add to registry
+# Register the importer
 IMPORTERS["excel"] = ExcelImporter
 ```
 
-The system automatically picks up new formats without changing anything else.
-
-## What You Get
-
-Clean SHACL schemas like this:
-```turtle
-i14y:myDataShape a sh:NodeShape ;
-    rdfs:label "My Dataset"@en ;
-    sh:property i14y:myDataShape/year,
-                i14y:myDataShape/region .
-```
-
-## Files You Need
-
-```
-src/
-├── format_importers.py    # Format handlers
-├── structure_importer.py  # Main controller
-└── .github/workflows/structure_import.yml  # Automation
-```
-
-That's it - the system handles PX files now, CSV files, and any format you add later.
+The main code uses new importers without code changes elsewhere.
