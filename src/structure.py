@@ -1,3 +1,10 @@
+# Workflow Example
+    # Receive a dataset distribution with a PX file URL
+    # Check if it matches PX file patterns
+    # Download and parse the PX file metadata
+    # Create a SHACL graph describing the data structure
+    # Upload the structure to the government data catalog
+
 import re
 import requests
 from rdflib import Graph, Namespace, RDF, URIRef, Literal
@@ -40,6 +47,25 @@ class StructureImporter:
         self.g.bind("owl", self.OWL)
         self.g.bind("xsd", self.XSD)
 
+# PX File Processing
+    # extract_px_identifier(): Extracts identifiers from BFS URLs (like "px-x-1304030000_301")
+    # download_px_file(): Downloads PX files directly from the BFS download API
+    # is_px_distribution(): Identifies whether a data distribution is a PX file based on URL patterns
+    
+# Metadata Extraction
+# The parse_px_metadata() method extracts key information from PX files:
+    # Titles and descriptions in multiple languages
+    # Dimensions: STUB dimensions (row categories) and HEADING dimensions (column categories)
+    # Values: The actual categorical values for each dimension
+    # Uses regex patterns to parse the PX format syntax
+    
+# SHACL Graph Creation
+    # Converts the parsed metadata into a SHACL NodeShape that includes:
+
+# API Integration
+    # Uploads the generated SHACL structure to the API in Turtle format.
+
+    
     def extract_px_identifier(self, url: str) -> str:
         """Extracts px identifier from URL"""
         path = urlparse(url).path
@@ -82,7 +108,12 @@ class StructureImporter:
                 parts[0].isdigit() and
                 parts[1].isdigit() and 
                 parts[2].isdigit())
-    
+        
+# data types for each column:
+    # Detects year/date columns by looking for keywords like "year", "jahr", "année"
+    # Identifies integers, decimals, booleans, and dates
+    # Adds numeric constraints (min/max values) for numeric fields
+    # Defaults to string type when uncertain
     def _guess_property_type(self, values: List[str], column_name: str) -> URIRef:
         """Infers the most specific datatype from values"""
         if not values:
@@ -383,3 +414,4 @@ class StructureImporter:
         except Exception as e:
             print(f"Error processing PX file {identifier} for dataset {dataset_id}: {str(e)}")
             return False
+
