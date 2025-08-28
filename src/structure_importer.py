@@ -1,43 +1,115 @@
 """
-Modular structure import framework for i14y datasets
-Supports PX for now can be extended
+Extensible structure importer - works with any format importer
 """
 
-import abc
-import requests
 import json
 import os
-from typing import Dict, List, Any, Optional, Tuple
-from datetime import datetime
 import time
+import requests
+from datetime import datetime
+from rdflib import Graph, Namespace, RDF, URIRef, Literal
+from rdflib.namespace import SH, RDFS, XSD, DCTERMS
+from typing import Dict, List
+from format_importers import get_suitable_importer
 
-class StructureImporter(abc.ABC):
-    """Abstract base class for structure importers"""
+
+class StructureImporter:
+    """Main structure importer that works with any format"""
     
     def __init__(self, api_token: str):
         self.api_token = api_token
         self.base_url = "https://api-a.i14y.admin.ch/api/partner/v1"
     
-    @abc.abstractmethod
-    def can_process_distribution(self, distribution: Dict) -> bool:
-        """Check if this importer can process the given distribution"""
-        pass
+    def create_shacl_graph(self, metadata: Dict) -> str:
+        """Create SHACL graph from metadata (format-agnostic)"""
+        g = Graph()
+        
+        # Namespaces
+        SH_NS = SH
+        DCTERMS_NS = DCTERMS
+        RDFS_NS = RDFS
+        XSD_NS = XSD
+        I14Y_NS = Namespace("https://www.i14y.admin.ch/resources/datasets/structure/")
+        
+        g.bind("sh", SH_NS)
+        g.bind("dcterms", DCTERMS_NS)
+        g.bind("rdfs", RDFS_NS)
+        g.bind("xsd", XSD_NS)
+        g.bind("i14y", I14Y_NS)
+        
+        # Create main shape
+        shape_name = f"{metadata['identifier']}Shape"
+        shape_uri = I14Y_NS[shape_name]
+        
+        g.add((shape_uri, RDF.type, SH_NS.NodeShape))
+        
+        # Add titles
+        for lang, title in metadata["title"].items():
+            g.add((shape_uri, RDFS_NS.label, Literal(title, lang=lang)))
+        
+        # Add descriptions
+        for lang, desc in metadata["description"].items():
+            g.add((shape_uri, DCTERMS_NS.description, Literal(desc, lang=lang)))
+        
+        # Add timestamps
+        now = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S")
+        g.add((shape_uri, DCTERMS_NS.created, Literal(now, datatype=XSD_NS.dateTime)))
+        g.add((shape_uri, DCTERMS_NS.modified, Literal(now, datatype=XSD_NS.dateTime)))
+        
+        g.add((shape_uri, SH_NS.closed, Literal(True)))
+        
+        # Add properties
+        for i, prop in enumerate(metadata["properties"]):
+            prop_uri = I14Y_NS[f"{shape_name}/{prop['name']}"]
+            
+            g.add((prop_uri, RDF.type, SH_NS.PropertyShape))
+            g.add((shape_uri, SH_NS.property, prop_uri))
+            g.add((prop_uri, SH_NS.path, prop_uri))
+            g.add((prop_uri, SH_NS.order, Literal(i)))
+            g.add((prop_uri, SH_NS.minCount, Literal(1)))
+            g.add((prop_uri, SH_NS.maxCount, Literal(1)))
+            
+            # Set datatype
+            datatype_map = {
+                "string": XSD_NS.string,
+                "integer": XSD_NS.integer,
+                "decimal": XSD_NS.decimal,
+                "gYear": XSD_NS.gYear,
+                "date": XSD_NS.date,
+                "boolean": XSD_NS.boolean
+            }
+            datatype = datatype_map.get(prop["datatype"], XSD_NS.string)
+            g.add((prop_uri, SH_NS.datatype, datatype))
+            
+            # Add multilingual names
+            for lang, label in prop["labels"].items():
+                g.add((prop_uri, SH_NS.name, Literal(label, lang=lang)))
+        
+        return g.serialize(format="turtle")
     
-    @abc.abstractmethod
-    def process_distribution(self, distribution: Dict, dataset_id: str) -> Tuple[bool, Optional[str]]:
-        """
-        Process a distribution and create structure
-        Returns: (success: bool, structure_id: Optional[str])
-        """
-        pass
+    def upload_structure(self, dataset_id: str, turtle_data: str) -> bool:
+        """Upload SHACL structure to API"""
+        headers = {
+            "Authorization": self.api_token,
+            "Content-Type": "text/turtle"
+        }
+        
+        url = f"{self.base_url}/datasets/{dataset_id}/structures/imports"
+        
+        try:
+            response = requests.post(url, headers=headers, data=turtle_data, verify=False, timeout=30)
+            if response.status_code in [200, 201]:
+                print(f"    Structure uploaded: {response.text.strip()}")
+                return True
+            else:
+                print(f"    Upload failed: {response.status_code} - {response.text}")
+                return False
+        except Exception as e:
+            print(f"    Upload error: {str(e)}")
+            return False
     
-    @abc.abstractmethod
-    def get_importer_name(self) -> str:
-        """Return the name of this importer for logging"""
-        pass
-    
-    def delete_existing_structure(self, dataset_id: str) -> bool:
-        """Delete existing structure for a dataset"""
+    def delete_structure(self, dataset_id: str) -> bool:
+        """Delete existing structure"""
         headers = {
             "Authorization": self.api_token,
             "Content-Type": "application/json"
@@ -47,76 +119,12 @@ class StructureImporter(abc.ABC):
         
         try:
             response = requests.delete(url, headers=headers, verify=False, timeout=30)
-            if response.status_code in [200, 204, 404]:  # 404 means no structure exists
-                return True
-            else:
-                print(f"Warning: Failed to delete structure for {dataset_id}: {response.status_code}")
-                return False
+            return response.status_code in [200, 204, 404]
         except Exception as e:
-            print(f"Error deleting structure for {dataset_id}: {str(e)}")
             return False
     
-    def upload_structure(self, dataset_id: str, structure_data: str, content_type: str = "text/turtle") -> Tuple[bool, Optional[str]]:
-        """Upload structure to the API"""
-        headers = {
-            "Authorization": self.api_token,
-            "Content-Type": content_type
-        }
-        
-        url = f"{self.base_url}/datasets/{dataset_id}/structures/imports"
-        
-        try:
-            response = requests.post(
-                url,
-                headers=headers,
-                data=structure_data,
-                verify=False,
-                timeout=30
-            )
-            
-            if response.status_code in [200, 201]:
-                structure_id = response.text.strip('"') if response.text else None
-                return True, structure_id
-            else:
-                print(f"Error uploading structure for dataset {dataset_id}: {response.status_code} - {response.text}")
-                return False, None
-                
-        except Exception as e:
-            print(f"Error uploading structure for dataset {dataset_id}: {str(e)}")
-            return False, None
-
-
-class StructureImportManager:
-    """Manages multiple structure importers and coordinates the import process"""
-    
-    def __init__(self, api_token: str, dataset_ids_file: str):
-        self.api_token = api_token
-        self.dataset_ids_file = dataset_ids_file
-        self.importers: List[StructureImporter] = []
-        self.stats = {
-            'processed': 0,
-            'structures_created': 0,
-            'structures_updated': 0,
-            'structures_deleted': 0,
-            'errors': 0
-        }
-    
-    def register_importer(self, importer: StructureImporter):
-        """Register a structure importer"""
-        self.importers.append(importer)
-        print(f"Registered importer: {importer.get_importer_name()}")
-    
-    def load_dataset_ids(self) -> Dict[str, Dict]:
-        """Load dataset IDs from file"""
-        try:
-            with open(self.dataset_ids_file, 'r') as f:
-                return json.load(f)
-        except FileNotFoundError:
-            print(f"Dataset IDs file not found: {self.dataset_ids_file}")
-            return {}
-    
-    def get_dataset_from_api(self, dataset_id: str) -> Optional[Dict]:
-        """Fetch dataset metadata from API"""
+    def get_dataset_from_api(self, dataset_id: str) -> Dict:
+        """Fetch dataset from API"""
         headers = {
             "Authorization": self.api_token,
             "Accept": "application/json"
@@ -129,178 +137,202 @@ class StructureImportManager:
             if response.status_code == 200:
                 return response.json()
             else:
-                print(f"Error fetching dataset {dataset_id}: {response.status_code}")
-                return None
+                print(f"  Could not fetch dataset: {response.status_code}")
+                return {}
         except Exception as e:
-            print(f"Error fetching dataset {dataset_id}: {str(e)}")
-            return None
+            print(f"  Fetch error: {str(e)}")
+            return {}
     
-    def process_dataset(self, identifier: str, dataset_id: str, force_update: bool = False) -> bool:
-        """Process a single dataset for structure import"""
-        print(f"\nProcessing dataset: {identifier} (ID: {dataset_id})")
+    def find_processable_distributions(self, distributions: List[Dict]) -> List[tuple]:
+        """Find distributions that can be processed and deduplicate"""
+        processable = []
+        seen_identifiers = set()
         
-        # Get dataset metadata
+        for dist in distributions:
+            importer, format_name = get_suitable_importer(dist)
+            if importer:
+                identifier = importer.get_identifier(dist)
+                if identifier and identifier not in seen_identifiers:
+                    processable.append((dist, importer, format_name, identifier))
+                    seen_identifiers.add(identifier)
+                elif identifier:
+                    print(f"    Skipping duplicate {format_name} file: {identifier}")
+        
+        return processable
+    
+    def process_dataset(self, dataset_id: str, identifier: str, force_delete: bool = False) -> bool:
+        """Process a single dataset and create structure"""
+        print(f"Processing: {identifier}")
+        
+        # Get dataset from API
         dataset_data = self.get_dataset_from_api(dataset_id)
         if not dataset_data:
-            print(f"Could not fetch dataset data for {identifier}")
             return False
-        
-        # Get distributions
+            
         distributions = dataset_data.get('data', {}).get('distributions', [])
         if not distributions:
-            print(f"No distributions found for dataset {identifier}")
+            print(f"  No distributions found")
             return False
         
-        # Group distributions by format/type to avoid duplicates
-        processed_identifiers = set()
-        structure_created = False
+        # Find processable distributions (with deduplication)
+        processable = self.find_processable_distributions(distributions)
+        if not processable:
+            print(f"  No supported file formats found")
+            return False
         
-        # Try each distribution with each importer
-        for dist_idx, distribution in enumerate(distributions):
-            print(f"  Checking distribution {dist_idx + 1}/{len(distributions)}")
+        # Process first suitable distribution
+        dist, importer, format_name, file_id = processable[0]
+        print(f"  Processing {format_name} file: {file_id}")
+        
+        try:
+            # Always delete existing structure for updated datasets, optional for new ones
+            if force_delete:
+                print(f"  Deleting existing structure (dataset was updated)")
+                self.delete_structure(dataset_id)
+            else:
+                # For new datasets, try to delete in case there's an old structure
+                self.delete_structure(dataset_id)
             
-            for importer in self.importers:
-                if importer.can_process_distribution(distribution):
-                    # For PX files, check if we've already processed this PX identifier
-                    if hasattr(importer, 'extract_px_identifier'):
-                        access_url = self._get_access_url_from_distribution(distribution)
-                        if access_url:
-                            px_identifier = importer.extract_px_identifier(access_url)
-                            if px_identifier and px_identifier in processed_identifiers:
-                                print(f"  Skipping duplicate PX file: {px_identifier}")
-                                continue
-                            if px_identifier:
-                                processed_identifiers.add(px_identifier)
-                    
-                    print(f"  Using {importer.get_importer_name()} for distribution {dist_idx + 1}")
-                    
-                    # Delete existing structure if force update or if we're about to create a new one
-                    if force_update or not structure_created:
-                        importer.delete_existing_structure(dataset_id)
-                    
-                    success, structure_id = importer.process_distribution(distribution, dataset_id)
-                    
-                    if success:
-                        print(f"  Structure created successfully: {structure_id}")
-                        structure_created = True
-                        self.stats['structures_created'] += 1
-                        break  # Move to next distribution
-                    else:
-                        print(f"  Failed to create structure with {importer.get_importer_name()}")
+            # Download and parse file
+            metadata = importer.download_and_parse(dist)
             
-            if structure_created:
-                break  # We found a working importer for this dataset
-        
-        if not structure_created:
-            print(f"  No suitable importer found for dataset {identifier}")
-        
-        self.stats['processed'] += 1
-        return structure_created
+            # Create and upload SHACL
+            turtle_data = self.create_shacl_graph(metadata)
+            success = self.upload_structure(dataset_id, turtle_data)
+            
+            if success:
+                print(f"  Structure {'updated' if force_delete else 'created'} successfully")
+                return True
+            else:
+                return False
+                
+        except Exception as e:
+            print(f"  Error processing {file_id}: {str(e)}")
+            return False
     
-    def _get_access_url_from_distribution(self, distribution: Dict) -> Optional[str]:
-        """Extract access URL from distribution for deduplication purposes"""
-        if isinstance(distribution.get('accessUrl'), dict):
-            return distribution['accessUrl'].get('uri')
-        elif isinstance(distribution.get('downloadUrl'), dict):
-            return distribution['downloadUrl'].get('uri')
-        else:
-            return distribution.get('accessUrl') or distribution.get('downloadUrl')
-    
-    def run_import(self, force_update: bool = False, specific_datasets: Optional[List[str]] = None):
-        """Run the structure import process"""
-        print("Starting structure import process...")
-        print(f"Registered importers: {[imp.get_importer_name() for imp in self.importers]}")
+    def parse_harvest_log(self) -> Dict[str, List[str]]:
+        """Parse harvest log to get dataset status"""
+        log_status = {
+            "created": [],
+            "updated": [],
+            "unchanged": [],
+            "deleted": []
+        }
         
+        try:
+            with open('harvest_log.txt', 'r') as f:
+                content = f.read()
+                
+            current_section = None
+            for line in content.split('\n'):
+                line = line.strip()
+                
+                if "Created datasets:" in line:
+                    current_section = "created"
+                elif "Updated datasets:" in line:
+                    current_section = "updated"
+                elif "Unchanged datasets:" in line:
+                    current_section = "unchanged"
+                elif "Deleted datasets:" in line:
+                    current_section = "deleted"
+                elif line.startswith("- ") and current_section:
+                    dataset_id = line[2:].strip()  # Remove "- " prefix
+                    log_status[current_section].append(dataset_id)
+                    
+        except FileNotFoundError:
+            print("No harvest log found - processing all datasets as new")
+            
+        return log_status
+
+    def run_import(self):
+        """Main import process with harvest log awareness"""
         # Load dataset IDs
-        dataset_ids = self.load_dataset_ids()
-        if not dataset_ids:
-            print("No dataset IDs found. Run the harvester first.")
+        try:
+            with open('OGD_OFS/data/dataset_ids.json', 'r') as f:
+                dataset_ids = json.load(f)
+        except FileNotFoundError:
+            print("ERROR: dataset_ids.json not found")
             return
         
-        # Filter datasets if specific ones requested
-        if specific_datasets:
-            dataset_ids = {k: v for k, v in dataset_ids.items() if k in specific_datasets}
-            print(f"Processing specific datasets: {list(dataset_ids.keys())}")
+        # Parse harvest log to understand dataset status
+        harvest_status = self.parse_harvest_log()
         
-        # Process each dataset
+        # Statistics
+        processed = 0
+        created_structures = 0
+        updated_structures = 0
+        skipped = 0
+        errors = 0
+        
+        print("Starting extensible structure import...")
+        print(f"Harvest status - Created: {len(harvest_status['created'])}, Updated: {len(harvest_status['updated'])}")
+        
+        # Process datasets based on their harvest status
+        datasets_to_process = set(harvest_status['created'] + harvest_status['updated'])
+        
         for identifier, data in dataset_ids.items():
             dataset_id = data.get('id')
             if not dataset_id:
-                print(f"No ID found for dataset {identifier}")
+                continue
+                
+            processed += 1
+            
+            # Only process created or updated datasets
+            if identifier not in datasets_to_process:
+                print(f"Skipping unchanged dataset: {identifier}")
+                skipped += 1
                 continue
             
             try:
-                self.process_dataset(identifier, dataset_id, force_update)
-                time.sleep(0.5)  # Rate limiting
+                is_update = identifier in harvest_status['updated']
+                print(f"Processing {'updated' if is_update else 'new'} dataset: {identifier}")
+                
+                if self.process_dataset(dataset_id, identifier, force_delete=is_update):
+                    if is_update:
+                        updated_structures += 1
+                    else:
+                        created_structures += 1
+                    
             except Exception as e:
-                print(f"Error processing dataset {identifier}: {str(e)}")
-                self.stats['errors'] += 1
+                print(f"  Error: {str(e)}")
+                errors += 1
+            
+            time.sleep(0.5)  # Rate limiting
         
-        self.print_summary()
-    
-    def print_summary(self):
-        """Print import summary"""
-        print("\n=== Structure Import Summary ===")
-        print(f"Datasets processed: {self.stats['processed']}")
-        print(f"Structures created: {self.stats['structures_created']}")
-        print(f"Structures updated: {self.stats['structures_updated']}")
-        print(f"Structures deleted: {self.stats['structures_deleted']}")
-        print(f"Errors: {self.stats['errors']}")
-        
-        # Create log
-        log_content = f"Structure import completed at {datetime.now()}\n"
-        log_content += f"Processed: {self.stats['processed']}\n"
-        log_content += f"Created: {self.stats['structures_created']}\n"
-        log_content += f"Updated: {self.stats['structures_updated']}\n"
-        log_content += f"Deleted: {self.stats['structures_deleted']}\n"
-        log_content += f"Errors: {self.stats['errors']}\n"
+        # Print summary
+        print(f"\n=== Summary ===")
+        print(f"Datasets processed: {processed}")
+        print(f"Structures created: {created_structures}")
+        print(f"Structures updated: {updated_structures}")
+        print(f"Skipped (unchanged): {skipped}")
+        print(f"Errors: {errors}")
         
         # Save log
-        log_path = 'structure_import_log.txt'
-        with open(log_path, 'w') as f:
+        log_content = f"Structure import completed at {datetime.now()}\n"
+        log_content += f"Based on harvest log status:\n"
+        log_content += f"- New datasets processed: {len(harvest_status['created'])}\n"
+        log_content += f"- Updated datasets processed: {len(harvest_status['updated'])}\n"
+        log_content += f"- Unchanged datasets skipped: {len(harvest_status['unchanged'])}\n"
+        log_content += f"Results:\n"
+        log_content += f"- Structures created: {created_structures}\n"
+        log_content += f"- Structures updated: {updated_structures}\n"
+        log_content += f"- Errors: {errors}\n"
+        
+        with open('structure_import_log.txt', 'w') as f:
             f.write(log_content)
-        print(f"Log saved to: {log_path}")
+        
+        print("Log saved to structure_import_log.txt")
 
 
-# Example usage and main execution
 def main():
-    import argparse
-    
-    parser = argparse.ArgumentParser(description='Import structures for i14y datasets')
-    parser.add_argument('--force-update', action='store_true', 
-                       help='Force update all structures')
-    parser.add_argument('--datasets', nargs='*', 
-                       help='Process only specific datasets (by identifier)')
-    
-    args = parser.parse_args()
-    
-    # Get API token from environment
+    """Main execution"""
     api_token = os.getenv('ACCESS_TOKEN')
     if not api_token:
         print("ERROR: ACCESS_TOKEN environment variable not set")
         return
     
-    # Initialize manager
-    dataset_ids_file = 'OGD_OFS/data/dataset_ids.json'
-    manager = StructureImportManager(api_token, dataset_ids_file)
-    
-    # Register importers
-    # Import the simplified PX importer
-    try:
-        from simplified_px_shacl_importer import SimplifiedPXStructureImporter
-        manager.register_importer(SimplifiedPXStructureImporter(api_token))
-    except ImportError:
-        print("Warning: PX Structure Importer not available")
-    
-    # Future importers can be registered here:
-    # manager.register_importer(CSVStructureImporter(api_token))
-    # manager.register_importer(JSONStructureImporter(api_token))
-    
-    # Run import
-    manager.run_import(
-        force_update=args.force_update,
-        specific_datasets=args.datasets
-    )
+    importer = StructureImporter(api_token)
+    importer.run_import()
 
 
 if __name__ == "__main__":
