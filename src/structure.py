@@ -2,8 +2,8 @@
     # Receive a dataset distribution with a PX file URL
     # Check if it matches PX file patterns
     # Download and parse the PX file metadata
-    # Create a SHACL graph describing the data structure
-    # Upload the structure to the government data catalog
+    # Create a SHACL graph 
+    # Upload the structure
 
 import re
 import requests
@@ -389,7 +389,6 @@ class StructureImporter:
         if not self.is_px_distribution(distribution):
             return False
             
-        # Get access URL safely
         access_url = None
         if isinstance(distribution.get('accessUrl'), dict):
             access_url = distribution['accessUrl'].get('uri')
@@ -414,4 +413,5 @@ class StructureImporter:
         except Exception as e:
             print(f"Error processing PX file {identifier} for dataset {dataset_id}: {str(e)}")
             return False
+
 
