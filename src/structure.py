@@ -59,12 +59,6 @@ class StructureImporter:
     # Values: The actual categorical values for each dimension
     # Uses regex patterns to parse the PX format syntax
     
-# SHACL Graph Creation
-    # Converts the parsed metadata into a SHACL NodeShape that includes:
-
-# API Integration
-    # Uploads the generated SHACL structure to the API in Turtle format.
-
     
     def extract_px_identifier(self, url: str) -> str:
         """Extracts px identifier from URL"""
@@ -251,6 +245,10 @@ class StructureImporter:
                 return self.clean_dimension_name(dim_labels[lang])
         return self.clean_dimension_name(list(dim_labels.values())[0])
 
+    # SHACL Graph Creation
+    # Converts the parsed metadata into a SHACL NodeShape that includes:
+
+    
     def create_shacl_graph(self, dataset_id: str, structure_name: str, metadata: Dict) -> Graph:
         """Creates SHACL graph with multilingual properties and proper datatypes"""
         # Create NodeShape with titles and descriptions
@@ -320,6 +318,8 @@ class StructureImporter:
             self.g.add((prop_uri, self.SH.datatype, datatype))
         
         return self.g
+
+    # Uploads the generated SHACL structure to I14Y in Turtle format.
 
     def upload_structure(self, dataset_id: str, structure_graph: Graph) -> bool:
         """Uploads the SHACL structure to the API"""
@@ -413,5 +413,6 @@ class StructureImporter:
         except Exception as e:
             print(f"Error processing PX file {identifier} for dataset {dataset_id}: {str(e)}")
             return False
+
 
 
