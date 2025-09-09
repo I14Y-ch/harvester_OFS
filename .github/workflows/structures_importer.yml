@@ -20,63 +20,65 @@ jobs:
         workflow_conclusion: success
         path: OGD_OFS/data
     
-#     - name: Download harvest log
-#       uses: dawidd6/action-download-artifact@v4
-#       with:
-#         name: harvest-log
-#         workflow: OGD_OFS.yml
-#         workflow_conclusion: success
-#         path: .
-#         if_no_artifact_found: warn
+    - name: Download harvest log
+      uses: dawidd6/action-download-artifact@v4
+      with:
+        name: harvest-log
+        workflow: OGD_OFS.yml
+        workflow_conclusion: success
+        path: .
+        if_no_artifact_found: warn
     
-#     - name: Set up Python
-#       uses: actions/setup-python@v5
-#       with:
-#         python-version: '3.9'
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.9'
     
-#     - name: Install dependencies
-#       run: pip install requests rdflib python-dateutil
+    - name: Install dependencies
+      run: pip install requests rdflib python-dateutil
     
-#     - name: Get access token
-#       id: get-token
-#       env:
-#         CLIENT_ID_ABN: ${{ secrets.CLIENT_ID_ABN }}
-#         CLIENT_SECRET_ABN: ${{ secrets.CLIENT_SECRET_ABN }}
-#       run: |
-#         python - <<EOF
-#         import requests
-#         import os
+    - name: Get access token
+      id: get-token
+      env:
+        CLIENT_ID_ABN: ${{ secrets.CLIENT_ID_ABN }}
+        CLIENT_SECRET_ABN: ${{ secrets.CLIENT_SECRET_ABN }}
+      run: |
+        python - <<EOF
+        import requests
+        import os
     
-#         def get_access_token(client_id, client_secret):
-#             data = {'grant_type': 'client_credentials'}
-#             response = requests.post(
-#                 "https://identity-a.bit.admin.ch/realms/bfs-sis-a/protocol/openid-connect/token",
-#                 data=data,
-#                 verify=False,
-#                 auth=(client_id, client_secret)
-#             )
-#             if response.status_code >= 400:
-#                 raise Exception("Failed to get token")
-#             return response.json()
+        def get_access_token(client_id, client_secret):
+        def get_access_token(client_id, client_secret):
+        def get_access_token(client_id, client_secret):
+            data = {'grant_type': 'client_credentials'}
+            response = requests.post(
+                "https://identity-a.bit.admin.ch/realms/bfs-sis-a/protocol/openid-connect/token",
+                data=data,
+                verify=False,
+                auth=(client_id, client_secret)
+            )
+            if response.status_code >= 400:
+                raise Exception("Failed to get token")
+            return response.json()
+   
+        client_id = os.environ['CLIENT_ID_ABN']
+        client_secret = os.environ['CLIENT_SECRET_ABN']
+        response = get_access_token(client_id, client_secret)
+        if 'access_token' not in response:
+            raise Exception("Failed to get access token")
+        access_token = 'Bearer ' + response['access_token']
+      
+        with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+            f.write(f"access_token={access_token}\n")
+        EOF
     
-#         client_id = os.environ['CLIENT_ID_ABN']
-#         client_secret = os.environ['CLIENT_SECRET_ABN']
-#         response = get_access_token(client_id, client_secret)
-#         if 'access_token' not in response:
-#             raise Exception("Failed to get access token")
-#         access_token = 'Bearer ' + response['access_token']
-        
-#         with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
-#             f.write(f"access_token={access_token}\n")
-#         EOF
+    - name: Run extensible structure import
+      env:
+        ACCESS_TOKEN: ${{ steps.get-token.outputs.access_token }}
+      run: python src/structure_importer.py
     
-#     - name: Run extensible structure import
-#       env:
-#         ACCESS_TOKEN: ${{ steps.get-token.outputs.access_token }}
-#       run: python src/structure_importer.py
-    
-#     - name: Upload log
-#       uses: actions/upload-artifact@v4
-#       with:
-#         name: structure-import-log
-#         path: structure_import_log.txt
+    - name: Upload log
+      uses: actions/upload-artifact@v4
+      with:
+        name: structure-import-log
+        path: structure_import_log.txt
