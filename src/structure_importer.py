@@ -265,10 +265,11 @@ class StructureImporter:
         errors = 0
         
         print("Starting extensible structure import...")
-        print(f"Harvest status - Created: {len(harvest_status['created'])}, Updated: {len(harvest_status['updated'])}")
+        print(f"Harvest status - Created: {len(harvest_status['created'])}, Updated: {len(harvest_status['updated'])}, Unchanged: {len(harvest_status['unchanged'])}")
         
         # Process datasets based on their harvest status
-        datasets_to_process = set(harvest_status['created'] + harvest_status['updated'])
+        # datasets_to_process = set(harvest_status['created'] + harvest_status['updated'])
+        datasets_to_process = set(harvest_status['unchanged'] + harvest_status['created'] + harvest_status['updated']) # First run
         
         for identifier, data in dataset_ids.items():
             dataset_id = data.get('id')
