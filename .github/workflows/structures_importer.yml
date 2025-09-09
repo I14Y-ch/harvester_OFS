@@ -1,9 +1,9 @@
-# name: Structure Import
+name: Structure Import
 
-# on:
-#   schedule:
-#     - cron: '30 0 * * *'  # Runs daily at 00:30
-#   workflow_dispatch:  # Manual trigger
+on:
+  schedule:
+    - cron: '30 0 * * *'  # Runs daily at 00:30
+  workflow_dispatch:  # Manual trigger
 
 # jobs:
 #   import-structures:
