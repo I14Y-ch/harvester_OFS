@@ -5,20 +5,20 @@ on:
     - cron: '30 0 * * *'  # Runs daily at 00:30
   workflow_dispatch:  # Manual trigger
 
-# jobs:
-#   import-structures:
-#     runs-on: ubuntu-latest
-#     steps:
-#     - name: Checkout repository
-#       uses: actions/checkout@v4
+jobs:
+  import-structures:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
     
-#     - name: Download dataset IDs
-#       uses: dawidd6/action-download-artifact@v4
-#       with:
-#         name: dataset_ids
-#         workflow: OGD_OFS.yml
-#         workflow_conclusion: success
-#         path: OGD_OFS/data
+    - name: Download dataset IDs
+      uses: dawidd6/action-download-artifact@v4
+      with:
+        name: dataset_ids
+        workflow: OGD_OFS.yml
+        workflow_conclusion: success
+        path: OGD_OFS/data
     
 #     - name: Download harvest log
 #       uses: dawidd6/action-download-artifact@v4
