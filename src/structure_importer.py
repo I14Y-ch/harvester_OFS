@@ -91,13 +91,22 @@ class StructureImporter:
         """Upload SHACL structure to API"""
         headers = {
             "Authorization": self.api_token,
-            "Content-Type": "multipart/form-data" #text/turtle
+            # Remove Content-Type header; requests will set it automatically for multipart/form-data
         }
         
         url = f"{self.base_url}/datasets/{dataset_id}/structures/imports"
         
+        # Prepare the file for multipart upload
+        files = {
+            "file": ("structure.ttl", turtle_data, "text/turtle")
+        }
+        
         try:
-            response = requests.post(url, headers=headers, data=turtle_data, verify=False, timeout=30)
+            print(f"Uploading structure to {url}...")  # Debugging: Print the URL
+            print(f"Headers: {headers}")
+            print(f"Files: {files}")
+            response = requests.post(url, headers=headers, files=files, verify=False, timeout=30)
+            
             if response.status_code in [200, 201]:
                 print(f"    Structure uploaded: {response.text.strip()}")
                 return True
