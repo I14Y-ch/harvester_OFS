@@ -91,7 +91,7 @@ class StructureImporter:
         """Upload SHACL structure to API"""
         headers = {
             "Authorization": self.api_token,
-            "Content-Type": "text/turtle"
+            "Content-Type": "multipart/form-data" #text/turtle
         }
         
         url = f"{self.base_url}/datasets/{dataset_id}/structures/imports"
@@ -269,7 +269,7 @@ class StructureImporter:
         
         # Process datasets based on their harvest status
         # datasets_to_process = set(harvest_status['created'] + harvest_status['updated'])
-        datasets_to_process = set(harvest_status['unchanged'] + harvest_status['created'] + harvest_status['updated']) # First run
+        datasets_to_process = set(harvest_status['unchanged'] + harvest_status['created'] + harvest_status['updated']) # TODO First run
         
         for identifier, data in dataset_ids.items():
             dataset_id = data.get('id')
