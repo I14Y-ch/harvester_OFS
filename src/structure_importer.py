@@ -162,8 +162,12 @@ class StructureImporter:
         
         for dist in distributions:
             importer, format_name = get_suitable_importer(dist)
+            
+            print(f"importer: {importer}, format_name{format_name}")
+            
             if importer:
                 identifier = importer.get_identifier(dist)
+                print(f"identifier: {identifier}")   
                 print(f"Identifier type: {type(identifier)}, value: {identifier}")
                 
                 # Ensure identifier is a string
