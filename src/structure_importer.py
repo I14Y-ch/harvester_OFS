@@ -175,7 +175,8 @@ class StructureImporter:
                         print(f"    Skipping duplicate {format_name} file: {identifier}")
                 else:
                     print(f"    Invalid identifier (not a string): {identifier}")
-        
+
+        print(f"processable: {processable}")        
         return processable
     
     def process_dataset(self, dataset_id: str, identifier: str, force_delete: bool = False) -> bool:
@@ -194,7 +195,6 @@ class StructureImporter:
         
         # Find processable distributions (with deduplication)
         processable = self.find_processable_distributions(distributions)
-        print(f"processable: {processable}")
         if not processable:
             print(f"  No supported file formats found")
             return False
