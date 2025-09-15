@@ -161,6 +161,7 @@ class StructureImporter:
             importer, format_name = get_suitable_importer(dist)
             if importer:
                 identifier = importer.get_identifier(dist)
+                print(f"Identifier type: {type(identifier)}, value: {identifier}")
                 
                 # Ensure identifier is a string
                 if isinstance(identifier, str):
