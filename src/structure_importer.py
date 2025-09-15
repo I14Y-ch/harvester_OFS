@@ -157,6 +157,8 @@ class StructureImporter:
         processable = []
         seen_identifiers = set()
         
+        print(f"distributions: {distributions}")
+        
         for dist in distributions:
             importer, format_name = get_suitable_importer(dist)
             if importer:
