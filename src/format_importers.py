@@ -58,6 +58,9 @@ class PXImporter:
         url = f"https://www.pxweb.bfs.admin.ch/DownloadFile.aspx?file={px_id}"
         response = requests.get(url, timeout=30)
         response.raise_for_status()
+        
+        # Explicitly set encoding (e.g., UTF-8)
+        response.encoding = 'utf-8'
         px_content = response.text
         
         # Parse metadata

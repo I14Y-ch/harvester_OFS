@@ -294,7 +294,8 @@ class StructureImporter:
                 continue
             
             try:
-                is_update = identifier in harvest_status['updated']
+                #is_update = identifier in harvest_status['updated']
+                is_update = identifier in harvest_status['updated'] or identifier in harvest_status['unchanged'] # TODO First run
                 print(f"Processing {'updated' if is_update else 'new'} dataset: {identifier}")
                 
                 if self.process_dataset(dataset_id, identifier, force_delete=is_update):
