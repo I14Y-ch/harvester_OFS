@@ -194,6 +194,7 @@ class StructureImporter:
         
         # Find processable distributions (with deduplication)
         processable = self.find_processable_distributions(distributions)
+        print(f"processable: {processable}")
         if not processable:
             print(f"  No supported file formats found")
             return False
