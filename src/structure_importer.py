@@ -161,11 +161,17 @@ class StructureImporter:
             importer, format_name = get_suitable_importer(dist)
             if importer:
                 identifier = importer.get_identifier(dist)
-                if identifier and identifier not in seen_identifiers:
-                    processable.append((dist, importer, format_name, identifier))
-                    seen_identifiers.add(identifier)
-                elif identifier:
-                    print(f"    Skipping duplicate {format_name} file: {identifier}")
+                
+                # Ensure identifier is a string
+                if isinstance(identifier, str):
+                    identifier_lower = identifier.lower()
+                    if identifier_lower not in seen_identifiers:
+                        processable.append((dist, importer, format_name, identifier))
+                        seen_identifiers.add(identifier_lower)
+                    else:
+                        print(f"    Skipping duplicate {format_name} file: {identifier}")
+                else:
+                    print(f"    Invalid identifier (not a string): {identifier}")
         
         return processable
     
