@@ -158,6 +158,7 @@ class StructureImporter:
         seen_identifiers = set()
         
         print(f"distributions: {distributions}")
+        print(f"processable1: {processable}")
         
         for dist in distributions:
             importer, format_name = get_suitable_importer(dist)
@@ -176,7 +177,7 @@ class StructureImporter:
                 else:
                     print(f"    Invalid identifier (not a string): {identifier}")
 
-        print(f"processable: {processable}")        
+        print(f"processable2: {processable}")        
         return processable
     
     def process_dataset(self, dataset_id: str, identifier: str, force_delete: bool = False) -> bool:
