@@ -37,15 +37,16 @@ class PXImporter:
         access_url = self.get_access_url(distribution)
         if not access_url:
             return None
-            
+        
         path = urlparse(access_url).path
         basename = os.path.basename(path)
         
         if '.' in basename:
             basename = basename.split('.')[0]
         
+        # Ensure the identifier matches the expected pattern
         if re.match(r'px-x-\d+_\d+', basename.lower()):
-            return basename
+            return str(basename)  # Ensure it's a string
         return None
     
     def download_and_parse(self, distribution: Dict) -> Dict:
@@ -190,9 +191,12 @@ class CSVImporter:
     def get_identifier(self, distribution: Dict) -> Optional[str]:
         """Get unique identifier for this file"""
         access_url = self.get_access_url(distribution)
-        if access_url:
-            return access_url.split('/')[-1].split('?')[0]
-        return None
+        if not access_url:
+            return None
+    
+        # Extract the last part of the URL path as the identifier
+        identifier = access_url.split('/')[-1].split('?')[0]
+        return str(identifier) if identifier else None
     
     def download_and_parse(self, distribution: Dict) -> Dict:
         """Download CSV file and extract structure"""
