@@ -26,17 +26,18 @@ class PXImporter:
     def get_access_url(self, distribution: Dict) -> Optional[str]:
         """Get access URL from distribution"""
         if isinstance(distribution.get('accessUrl'), dict):
-            return distribution['accessUrl'].get('uri')
+            return distribution['accessUrl'].get('uri')  # Extract 'uri' field
         elif isinstance(distribution.get('downloadUrl'), dict):
-            return distribution['downloadUrl'].get('uri')
+            return distribution['downloadUrl'].get('uri')  # Extract 'uri' field
         else:
+            # Return accessUrl or downloadUrl directly if they are strings
             return distribution.get('accessUrl') or distribution.get('downloadUrl')
     
     def get_identifier(self, distribution: Dict) -> Optional[str]:
         """Get unique identifier for this file"""
         access_url = self.get_access_url(distribution)
-        if not access_url:
-            return None
+        if not access_url or not isinstance(access_url, str):
+            return None  # Ensure access_url is a string
         
         path = urlparse(access_url).path
         basename = os.path.basename(path)
@@ -182,10 +183,11 @@ class CSVImporter:
     def get_access_url(self, distribution: Dict) -> Optional[str]:
         """Get access URL from distribution"""
         if isinstance(distribution.get('accessUrl'), dict):
-            return distribution['accessUrl'].get('uri')
+            return distribution['accessUrl'].get('uri')  # Extract 'uri' field
         elif isinstance(distribution.get('downloadUrl'), dict):
-            return distribution['downloadUrl'].get('uri')
+            return distribution['downloadUrl'].get('uri')  # Extract 'uri' field
         else:
+            # Return accessUrl or downloadUrl directly if they are strings
             return distribution.get('accessUrl') or distribution.get('downloadUrl')
     
     def get_identifier(self, distribution: Dict) -> Optional[str]:
