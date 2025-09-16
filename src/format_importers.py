@@ -164,7 +164,10 @@ class CSVImporter:
         media_type = distribution.get('mediaType', '')
         access_url = self.get_access_url(distribution)
         
-        print("TEST CSVImporter can_process")
+        print("DEBUG CSVImporter can_process")
+        print(f"Debug: format: {format}")
+        print(f"Debug: media_type: {media_type}")
+        print(f"Debug: access_url: {access_url}")
         
         csv_indicators = ['csv', 'text/csv', 'application/csv']
         
