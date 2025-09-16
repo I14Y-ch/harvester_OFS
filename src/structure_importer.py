@@ -157,11 +157,9 @@ class StructureImporter:
         processable = []
         seen_identifiers = set()
         
-        print(f"distributions: {distributions}")
-        print(f"processable1: {processable}")
+        #print(f"DEBUG distributions: {distributions}")
         
         for dist in distributions:
-            print(f"TEST1")
             importer, format_name = get_suitable_importer(dist)
             
             print(f"importer: {importer}, format_name{format_name}")
@@ -180,9 +178,7 @@ class StructureImporter:
                     else:
                         print(f"    Skipping duplicate {format_name} file: {identifier}")
                 else:
-                    print(f"    Invalid identifier (not a string): {identifier}")
-
-        print(f"processable2: {processable}")        
+                    print(f"    Invalid identifier (not a string): {identifier}")      
         return processable
     
     def process_dataset(self, dataset_id: str, identifier: str, force_delete: bool = False) -> bool:

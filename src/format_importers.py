@@ -45,8 +45,6 @@ class PXImporter:
         if '.' in basename:
             basename = basename.split('.')[0]
         
-        print(f"Debug: basename: {basename}")
-        
         # Ensure the identifier matches the expected pattern
         if re.match(r'px-x-\d+_\d+', basename.lower()):
             return str(basename)  # Ensure it's a string
@@ -163,11 +161,6 @@ class CSVImporter:
         format_info = distribution.get('format', {})
         media_type = distribution.get('mediaType', '')
         access_url = self.get_access_url(distribution)
-        
-        print("DEBUG CSVImporter can_process")
-        print(f"Debug: format: {format_info}")
-        print(f"Debug: media_type: {media_type}")
-        print(f"Debug: access_url: {access_url}")
         
         csv_indicators = ['csv', 'text/csv', 'application/csv']
         
