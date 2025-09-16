@@ -164,6 +164,8 @@ class CSVImporter:
         media_type = distribution.get('mediaType', '')
         access_url = self.get_access_url(distribution)
         
+        print("TEST CSVImporter can_process")
+        
         csv_indicators = ['csv', 'text/csv', 'application/csv']
         
         # Check format
