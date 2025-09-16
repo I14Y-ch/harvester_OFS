@@ -45,6 +45,8 @@ class PXImporter:
         if '.' in basename:
             basename = basename.split('.')[0]
         
+        print(f"Debug: basename: {basename}")
+        
         # Ensure the identifier matches the expected pattern
         if re.match(r'px-x-\d+_\d+', basename.lower()):
             return str(basename)  # Ensure it's a string
