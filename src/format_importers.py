@@ -165,7 +165,7 @@ class CSVImporter:
         access_url = self.get_access_url(distribution)
         
         print("DEBUG CSVImporter can_process")
-        print(f"Debug: format: {format}")
+        print(f"Debug: format: {format_info}")
         print(f"Debug: media_type: {media_type}")
         print(f"Debug: access_url: {access_url}")
         
@@ -178,8 +178,14 @@ class CSVImporter:
                 return True
         
         # Check media type
-        if any(indicator in media_type.lower() for indicator in csv_indicators):
-            return True
+        if isinstance(media_type, dict):
+            # Extract the 'code' field or fallback to an empty string
+            media_type_code = media_type.get('code', '').lower()
+            if any(indicator in media_type_code for indicator in csv_indicators):
+                return True
+        elif isinstance(media_type, str):
+            if any(indicator in media_type.lower() for indicator in csv_indicators):
+                return True
         
         # Check URL extension
         if access_url and access_url.lower().endswith('.csv'):
