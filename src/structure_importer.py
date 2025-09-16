@@ -161,6 +161,7 @@ class StructureImporter:
         print(f"processable1: {processable}")
         
         for dist in distributions:
+            print(f"TEST1")
             importer, format_name = get_suitable_importer(dist)
             
             print(f"importer: {importer}, format_name{format_name}")
