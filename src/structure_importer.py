@@ -157,12 +157,12 @@ class StructureImporter:
         processable = []
         seen_identifiers = set()
         
-        #print(f"DEBUG distributions: {distributions}")
+        # print(f"DEBUG distributions: {distributions}")
         
         for dist in distributions:
             importer, format_name = get_suitable_importer(dist)
             
-            print(f"importer: {importer}, format_name{format_name}")
+            # print(f"DEBUG importer: {importer}, format_name: {format_name}")
             
             if importer:
                 identifier = importer.get_identifier(dist)

@@ -2,7 +2,7 @@ name: PROD - I14Y Harvester OGD Office Fédéral de Statistique catalogue
 
 on:
   schedule:
-    - cron: '0 0 * * 1-5'  # Runs mon-fri at midnight
+    - cron: '0 0 * * *'  # Runs everyday at midnight
   workflow_dispatch:  # Allows manual triggering
 
 jobs:
