@@ -124,7 +124,7 @@ class StructureImporter:
             "Content-Type": "application/json"
         }
         
-        url = f"{self.base_url}/datasets/{dataset_id}/structure"
+        url = f"{self.base_url}/datasets/{dataset_id}/structures"
         
         try:
             response = requests.delete(url, headers=headers, verify=False, timeout=30)
