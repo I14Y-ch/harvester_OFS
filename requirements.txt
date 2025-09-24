@@ -2,3 +2,4 @@ rdflib
 beautifulsoup4
 requests
 python-dateutil
+chardet
