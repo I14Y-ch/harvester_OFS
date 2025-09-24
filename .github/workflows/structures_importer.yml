@@ -35,7 +35,7 @@ jobs:
         python-version: '3.9'
     
     - name: Install dependencies
-      run: pip install requests rdflib python-dateutil
+      run: pip install requests rdflib python-dateutil chardet
     
     - name: Get access token
       id: get-token
