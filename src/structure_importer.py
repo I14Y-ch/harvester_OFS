@@ -128,8 +128,17 @@ class StructureImporter:
         
         try:
             response = requests.delete(url, headers=headers, verify=False, timeout=30)
-            return response.status_code in [200, 204, 404]
+            if response.status_code in [200, 204]:
+                print(f"Structure for dataset {dataset_id} deleted successfully.")
+                return True
+            elif response.status_code == 404:
+                print(f"Structure for dataset {dataset_id} not found (already deleted or does not exist).")
+                return True
+            else:
+                print(f"Failed to delete structure for dataset {dataset_id}: {response.status_code} - {response.text}")
+                return False
         except Exception as e:
+            print(f"Error deleting structure for dataset {dataset_id}: {str(e)}")
             return False
     
     def get_dataset_from_api(self, dataset_id: str) -> Dict:
