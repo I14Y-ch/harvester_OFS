@@ -107,7 +107,7 @@ class StructureImporter:
             print(f"Files: {files}")
             response = requests.post(url, headers=headers, files=files, verify=False, timeout=30)
             
-            if response.status_code in [200, 201]:
+            if response.status_code in [200, 201, 204]:
                 print(f"    Structure uploaded: {response.text.strip()}")
                 return True
             else:

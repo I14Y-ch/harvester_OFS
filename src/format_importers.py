@@ -9,6 +9,7 @@ import csv
 import io
 from urllib.parse import urlparse
 from typing import Dict, List, Optional
+import chardet
 
 
 class PXImporter:
@@ -51,7 +52,7 @@ class PXImporter:
         return None
     
     def download_and_parse(self, distribution: Dict) -> Dict:
-        """Download file and extract metadata"""
+        """Download PX file and extract metadata"""
         px_id = self.get_identifier(distribution)
         if not px_id:
             raise Exception("Could not extract PX identifier")
@@ -61,9 +62,18 @@ class PXImporter:
         response = requests.get(url, timeout=30)
         response.raise_for_status()
         
-        # Explicitly set encoding (e.g., UTF-8)
-        response.encoding = 'utf-8'
-        px_content = response.text
+        # Detect encoding
+        raw_content = response.content
+        detected_encoding = chardet.detect(raw_content)['encoding']
+        print(f"Detected encoding: {detected_encoding}")  # Debugging: Log detected encoding
+    
+        # Decode content using detected encoding
+        try:
+            px_content = raw_content.decode(detected_encoding or 'utf-8')
+        except (UnicodeDecodeError, LookupError):
+            # Fallback to UTF-8 with replacement for invalid characters
+            px_content = raw_content.decode('utf-8', errors='replace')
+            print("Warning: Failed to decode with detected encoding. Falling back to UTF-8 with replacement.")
         
         # Parse metadata
         return self.parse_px_content(px_content, px_id)
