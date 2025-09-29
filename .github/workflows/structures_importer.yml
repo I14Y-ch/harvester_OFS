@@ -75,12 +75,13 @@ jobs:
         ACCESS_TOKEN: ${{ steps.get-token.outputs.access_token }}
         CLIENT_ID_ABN: ${{ secrets.CLIENT_ID_ABN }}
         CLIENT_SECRET_ABN: ${{ secrets.CLIENT_SECRET_ABN }}
+        PYTHONPATH: ./src  # Add the src directory to the Python path
       run: |
         python - <<EOF
         import os
         import time
         import requests
-        from src.structure_importer import StructureImporter
+        from structure_importer import StructureImporter
 
         def refresh_token(client_id, client_secret):
             data = {'grant_type': 'client_credentials'}
