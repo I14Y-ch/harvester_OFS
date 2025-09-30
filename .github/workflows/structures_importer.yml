@@ -70,6 +70,9 @@ jobs:
             f.write(f"access_token={access_token}\n")
         EOF
     
+    - name: Write certificate to file
+      run: echo "${{ secrets.CERTIFICATE_ABN }}" > certificate.crt
+    
     - name: Run extensible structure import
       env:
         ACCESS_TOKEN: ${{ steps.get-token.outputs.access_token }}

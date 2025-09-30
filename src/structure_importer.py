@@ -105,7 +105,7 @@ class StructureImporter:
             print(f"Uploading structure to {url}...")  # Debugging: Print the URL
             print(f"Headers: {headers}")
             print(f"Files: {files}")
-            response = requests.post(url, headers=headers, files=files, verify=False, timeout=30)
+            response = requests.post(url, headers=headers, files=files, verify='certificate.crt', timeout=30)
             
             if response.status_code in [200, 201, 204]:
                 print(f"    Structure uploaded: {response.text.strip()}")
@@ -127,7 +127,7 @@ class StructureImporter:
         url = f"{self.base_url}/datasets/{dataset_id}/structures"
         
         try:
-            response = requests.delete(url, headers=headers, verify=False, timeout=30)
+            response = requests.delete(url, headers=headers, verify='certificate.crt', timeout=30)
             if response.status_code in [200, 204]:
                 print(f"Structure for dataset {dataset_id} deleted successfully.")
                 return True
@@ -151,7 +151,7 @@ class StructureImporter:
         url = f"https://api-a.i14y.admin.ch/api/partner/v1/datasets/{dataset_id}"
         
         try:
-            response = requests.get(url, headers=headers, verify=False, timeout=30)
+            response = requests.get(url, headers=headers, verify='certificate.crt', timeout=30)
             if response.status_code == 200:
                 return response.json()
             else:
