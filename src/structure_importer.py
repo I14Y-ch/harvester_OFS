@@ -103,8 +103,8 @@ class StructureImporter:
         
         try:
             print(f"Uploading structure to {url}...")  # Debugging: Print the URL
-            print(f"Headers: {headers}")
-            print(f"Files: {files}")
+            #print(f"Headers: {headers}")
+            #print(f"Files: {files}")
             response = requests.post(url, headers=headers, files=files, verify='certificate.crt', timeout=30)
             
             if response.status_code in [200, 201, 204]:

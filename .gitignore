@@ -1,1 +1,3 @@
 #scripts/i14y-test/data/data.json
+src/local_testing/test_certificate.py
+src/local_testing/certificate.crt
