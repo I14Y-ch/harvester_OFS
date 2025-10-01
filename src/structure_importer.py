@@ -6,11 +6,60 @@ import json
 import os
 import time
 import requests
+from config_structures import DATASET_IDS_PATH, USE_DATASET_LIST  # Explicitly import required variables
 from datetime import datetime
 from rdflib import Graph, Namespace, RDF, URIRef, Literal
 from rdflib.namespace import SH, RDFS, XSD, DCTERMS
 from typing import Dict, List
 from format_importers import get_suitable_importer
+
+
+def create_datasets_to_process(harvest_log_path: str, dataset_ids_path: str) -> List[str]:
+    """
+    Create a list of dataset IDs to process based on the harvest log and dataset IDs.
+
+    Args:
+        harvest_log_path (str): Path to the harvest log file.
+        dataset_ids_path (str): Path to the dataset IDs JSON file.
+
+    Returns:
+        List[str]: A list of dataset IDs to process.
+    """
+    # Load dataset IDs
+    try:
+        with open(dataset_ids_path, 'r') as f:
+            dataset_ids = json.load(f)
+    except FileNotFoundError:
+        print(f"ERROR: {dataset_ids_path} not found")
+        return []
+
+    # Parse harvest log to understand dataset status
+    datasets_to_process = []
+    try:
+        with open(harvest_log_path, 'r') as f:
+            content = f.read()
+
+        current_section = None
+        for line in content.split('\n'):
+            line = line.strip()
+
+            if "Created datasets:" in line:
+                current_section = "created"
+            elif "Updated datasets:" in line:
+                current_section = "updated"
+            elif "Unchanged datasets:" in line:
+                current_section = "unchanged"
+            elif "Deleted datasets:" in line:
+                current_section = "deleted"
+            elif line.startswith("- ") and current_section:
+                dataset_id = line[2:].strip()  # Remove "- " prefix
+                datasets_to_process.append(dataset_id)
+
+    except FileNotFoundError:
+        print("No harvest log found - processing all datasets as new")
+        datasets_to_process = list(dataset_ids.keys())
+
+    return datasets_to_process
 
 
 class StructureImporter:
@@ -105,7 +154,7 @@ class StructureImporter:
             print(f"Uploading structure to {url}...")  # Debugging: Print the URL
             #print(f"Headers: {headers}")
             #print(f"Files: {files}")
-            response = requests.post(url, headers=headers, files=files, verify='certificate.crt', timeout=30)
+            response = requests.post(url, headers=headers, files=files, verify='src/local_testing/certificate_ABN.crt', timeout=30)
             
             if response.status_code in [200, 201, 204]:
                 print(f"    Structure uploaded: {response.text.strip()}")
@@ -127,7 +176,7 @@ class StructureImporter:
         url = f"{self.base_url}/datasets/{dataset_id}/structures"
         
         try:
-            response = requests.delete(url, headers=headers, verify='certificate.crt', timeout=30)
+            response = requests.delete(url, headers=headers, verify='src/local_testing/certificate_ABN.crt', timeout=30)
             if response.status_code in [200, 204]:
                 print(f"Structure for dataset {dataset_id} deleted successfully.")
                 return True
@@ -151,7 +200,7 @@ class StructureImporter:
         url = f"https://api-a.i14y.admin.ch/api/partner/v1/datasets/{dataset_id}"
         
         try:
-            response = requests.get(url, headers=headers, verify='certificate.crt', timeout=30)
+            response = requests.get(url, headers=headers, verify='src/local_testing/certificate_ABN.crt', timeout=30)
             if response.status_code == 200:
                 return response.json()
             else:
@@ -190,7 +239,7 @@ class StructureImporter:
                     print(f"    Invalid identifier (not a string): {identifier}")      
         return processable
     
-    def process_dataset(self, dataset_id: str, identifier: str, force_delete: bool = False) -> bool:
+    def process_dataset(self, dataset_id: str, identifier: str) -> bool:
         """Process a single dataset and create structure"""
         print(f"Processing: {identifier}")
         
@@ -216,12 +265,9 @@ class StructureImporter:
         
         try:
             # Always delete existing structure for updated datasets, optional for new ones
-            if force_delete:
-                print(f"  Deleting existing structure (dataset was updated)")
-                self.delete_structure(dataset_id)
-            else:
-                # For new datasets, try to delete in case there's an old structure
-                self.delete_structure(dataset_id)
+            # For new datasets, try to delete in case there's an old structure
+            print(f"  Deleting existing structure (dataset was updated)")
+            self.delete_structure(dataset_id)
             
             # Download and parse file
             metadata = importer.download_and_parse(dist)
@@ -231,7 +277,7 @@ class StructureImporter:
             success = self.upload_structure(dataset_id, turtle_data)
             
             if success:
-                print(f"  Structure {'updated' if force_delete else 'created'} successfully")
+                print(f"  Structure created successfully")
                 return True
             else:
                 return False
@@ -240,131 +286,104 @@ class StructureImporter:
             print(f"  Error processing {file_id}: {str(e)}")
             return False
     
-    def parse_harvest_log(self) -> Dict[str, List[str]]:
-        """Parse harvest log to get dataset status"""
-        log_status = {
-            "created": [],
-            "updated": [],
-            "unchanged": [],
-            "deleted": []
-        }
-        
-        try:
-            with open('harvest_log.txt', 'r') as f:
-                content = f.read()
-                
-            current_section = None
-            for line in content.split('\n'):
-                line = line.strip()
-                
-                if "Created datasets:" in line:
-                    current_section = "created"
-                elif "Updated datasets:" in line:
-                    current_section = "updated"
-                elif "Unchanged datasets:" in line:
-                    current_section = "unchanged"
-                elif "Deleted datasets:" in line:
-                    current_section = "deleted"
-                elif line.startswith("- ") and current_section:
-                    dataset_id = line[2:].strip()  # Remove "- " prefix
-                    log_status[current_section].append(dataset_id)
-                    
-        except FileNotFoundError:
-            print("No harvest log found - processing all datasets as new")
-            
-        return log_status
+    def run_import(self, datasets_to_process: Dict[str, Dict]):
+        """
+        Main import process with harvest log awareness.
 
-    def run_import(self):
-        """Main import process with harvest log awareness"""
-        # Load dataset IDs
-        try:
-            with open('OGD_OFS/data/dataset_ids.json', 'r') as f:
-                dataset_ids = json.load(f)
-        except FileNotFoundError:
-            print("ERROR: dataset_ids.json not found")
-            return
-        
-        # Parse harvest log to understand dataset status
-        harvest_status = self.parse_harvest_log()
-        
+        Args:
+            datasets_to_process (Dict[str, Dict]): A dictionary of datasets to process, where the key is the dataset ID
+                                                   and the value is the dataset metadata.
+        """
         # Statistics
         processed = 0
         created_structures = 0
-        updated_structures = 0
         skipped = 0
         errors = 0
-        
+
         print("Starting extensible structure import...")
-        print(f"Harvest status - Created: {len(harvest_status['created'])}, Updated: {len(harvest_status['updated'])}, Unchanged: {len(harvest_status['unchanged'])}")
-        
-        # Process datasets based on their harvest status
-        # datasets_to_process = set(harvest_status['created'] + harvest_status['updated'])
-        datasets_to_process = set(harvest_status['unchanged'] + harvest_status['created'] + harvest_status['updated']) # TODO First run
-        
-        for identifier, data in dataset_ids.items():
+        print(f"Datasets to process: {len(datasets_to_process)}")
+
+        # Process datasets
+        for identifier, data in datasets_to_process.items():
             dataset_id = data.get('id')
             if not dataset_id:
                 continue
-                
+
             processed += 1
-            
-            # Only process created or updated datasets
-            if identifier not in datasets_to_process:
-                print(f"Skipping unchanged dataset: {identifier}")
-                skipped += 1
-                continue
-            
+
             try:
-                #is_update = identifier in harvest_status['updated']
-                is_update = identifier in harvest_status['updated'] or identifier in harvest_status['unchanged'] # TODO First run
-                print(f"Processing {'updated' if is_update else 'new'} dataset: {identifier}")
-                
-                if self.process_dataset(dataset_id, identifier, force_delete=is_update):
-                    if is_update:
-                        updated_structures += 1
-                    else:
-                        created_structures += 1
-                    
+                print(f"Processing dataset: {identifier}")
+
+                if self.process_dataset(dataset_id, identifier):
+                    created_structures += 1
+
             except Exception as e:
                 print(f"  Error: {str(e)}")
                 errors += 1
-            
+
             time.sleep(0.5)  # Rate limiting
-        
+
         # Print summary
         print(f"\n=== Summary ===")
         print(f"Datasets processed: {processed}")
         print(f"Structures created: {created_structures}")
-        print(f"Structures updated: {updated_structures}")
-        print(f"Skipped (unchanged): {skipped}")
+        print(f"Skipped: {skipped}")
         print(f"Errors: {errors}")
-        
+
         # Save log
         log_content = f"Structure import completed at {datetime.now()}\n"
-        log_content += f"Based on harvest log status:\n"
-        log_content += f"- New datasets processed: {len(harvest_status['created'])}\n"
-        log_content += f"- Updated datasets processed: {len(harvest_status['updated'])}\n"
-        log_content += f"- Unchanged datasets skipped: {len(harvest_status['unchanged'])}\n"
         log_content += f"Results:\n"
+        log_content += f"- Datasets processed: {processed}\n"
         log_content += f"- Structures created: {created_structures}\n"
-        log_content += f"- Structures updated: {updated_structures}\n"
+        log_content += f"- Skipped: {skipped}\n"
         log_content += f"- Errors: {errors}\n"
-        
+
         with open('structure_import_log.txt', 'w') as f:
             f.write(log_content)
-        
+
         print("Log saved to structure_import_log.txt")
 
 
 def main():
     """Main execution"""
-    api_token = os.getenv('ACCESS_TOKEN')
+    #api_token = os.getenv('ACCESS_TOKEN')
+    api_token = "xxxx"
     if not api_token:
         print("ERROR: ACCESS_TOKEN environment variable not set")
         return
-    
+
+    if USE_DATASET_LIST:
+        # Get datasets from list
+        try:
+            with open(DATASET_IDS_PATH, 'r') as f:
+                datasets_to_process = json.load(f)
+        except FileNotFoundError:
+            print(f"ERROR: {DATASET_IDS_PATH} not found")
+            return
+    else:
+        # Create datasets to process from the harvest log
+        dataset_ids_path_harvesting = 'OGD_OFS/data/dataset_ids.json'
+        harvest_log_path = 'harvest_log.txt'
+
+        try:
+            with open(dataset_ids_path_harvesting, 'r') as f:
+                dataset_ids = json.load(f)
+        except FileNotFoundError:
+            print(f"ERROR: {dataset_ids_path_harvesting} not found")
+            return
+
+        datasets_to_process_ids = create_datasets_to_process(harvest_log_path, dataset_ids_path_harvesting)
+
+        # Build the datasets_to_process dictionary
+        datasets_to_process = {}
+        for ds_id in datasets_to_process_ids:
+            if ds_id in dataset_ids:
+                datasets_to_process[ds_id] = dataset_ids[ds_id]
+
+    print(f"Datasets to process: {len(datasets_to_process)}")
+
     importer = StructureImporter(api_token)
-    importer.run_import()
+    importer.run_import(datasets_to_process)
 
 
 if __name__ == "__main__":

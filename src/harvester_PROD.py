@@ -108,6 +108,26 @@ def change_level_i14y(id, level, token):
     response.raise_for_status()
     return response
 
+def check_dataset_exists(identifier: str) -> str:
+    """Checks if a dataset with the given identifier already exists."""
+    url = f"{API_BASE_URL}/datasets"
+    params = {"datasetIdentifier": identifier}
+    headers = {
+        "Authorization": API_TOKEN,
+        "Accept": "application/json"
+    }
+
+    try:
+        response = requests.get(url, params=params, headers=headers, verify=False)
+        response.raise_for_status()
+        data = response.json()
+
+        if "data" in data and len(data["data"]) > 0:
+            return data["data"][0]["id"]
+        return None
+    except Exception as e:
+        print(f"Error checking dataset existence for identifier {identifier}: {e}")
+        return None
 
 def change_status_i14y(id, status, token):
     """Change registration status of a dataset in i14y"""
@@ -208,8 +228,16 @@ def main():
         try:
             is_new_dataset = identifier not in previous_ids
             is_updated_dataset = modified_date and modified_date > yesterday
-
-            if is_new_dataset or is_updated_dataset:
+            
+            # If for some reason the log is not available, then the datasets we try 
+            # to write but already exist will be noted as unchanged
+            existing_dataset_id = check_dataset_exists(identifier)
+            if existing_dataset_id and not is_updated_dataset:
+                previous_ids[identifier] = {'id': existing_dataset_id} 
+                unchanged_datasets.append(identifier)
+                print(f"No changes detected for dataset: {identifier} (already exists)\n")
+            
+            elif is_new_dataset or is_updated_dataset:
                 action = "created" if is_new_dataset else "updated"
                 print(f"{action.capitalize()} dataset detected: {identifier}")
 

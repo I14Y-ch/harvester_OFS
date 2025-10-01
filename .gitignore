@@ -1,3 +1,8 @@
 #scripts/i14y-test/data/data.json
 src/local_testing/test_certificate.py
 src/local_testing/certificate.crt
+structure_import_log.txt
+src/local_testing/certificate_ABN.crt
+src/local_testing/certificate_PROD.crt
+src/local_testing/dataset_ids_copy.json
+src/local_testing/dataset_ids.json
