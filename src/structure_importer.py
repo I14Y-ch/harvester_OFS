@@ -6,6 +6,7 @@ import json
 import os
 import time
 import requests
+from config import API_BASE_URL_ABN
 from config_structures import DATASET_IDS_PATH, USE_DATASET_LIST  # Explicitly import required variables
 from datetime import datetime
 from rdflib import Graph, Namespace, RDF, URIRef, Literal
@@ -67,7 +68,7 @@ class StructureImporter:
     
     def __init__(self, api_token: str):
         self.api_token = api_token
-        self.base_url = "https://api-a.i14y.admin.ch/api/partner/v1"
+        self.base_url = API_BASE_URL_ABN
     
     def create_shacl_graph(self, metadata: Dict) -> str:
         """Create SHACL graph from metadata (format-agnostic)"""
@@ -197,7 +198,7 @@ class StructureImporter:
             "Accept": "application/json"
         }
         
-        url = f"https://api-a.i14y.admin.ch/api/partner/v1/datasets/{dataset_id}"
+        url = f"{API_BASE_URL_ABN}/datasets/{dataset_id}"
         
         try:
             response = requests.get(url, headers=headers, verify='src/local_testing/certificate_ABN.crt', timeout=30)

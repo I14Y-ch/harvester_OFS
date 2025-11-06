@@ -10,6 +10,8 @@ from typing import Dict, Any, List
 import datetime
 import time
 import urllib3
+import traceback
+from utils import timer
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -58,6 +60,8 @@ def fetch_datasets_from_api() -> List[Dict]:
             
             print(f"Processed {len(dataset_uris)} datasets in this batch")
             skip += limit
+            # Sergiy: break for debug
+            break
             
         except Exception as e:
             print(f"Error during API request: {e}")
@@ -91,6 +95,7 @@ def create_dataset_payload(dataset):
     return {"data": dataset}
 
 
+@timer
 def change_level_i14y(id, level, token):
     """Change publication level of a dataset in i14y"""
     response = requests.put(
@@ -108,6 +113,61 @@ def change_level_i14y(id, level, token):
     response.raise_for_status()
     return response
 
+
+@timer
+def get_all_existing_datasets_identifier_id_map(publisherIdentifier: str, pageSize: int = 20) -> str:
+    """Gets all existing datasets in one request"""
+    all_existing_datasets_identifier_id_map = {}
+
+    url = f"{API_BASE_URL_ABN}/datasets"
+    headers = {"Authorization": API_TOKEN, "Accept": "application/json"}
+    i = 1
+    has_more = True
+
+    while has_more:
+        params = {
+            "publisherIdentifier": publisherIdentifier,
+            "pageSize": pageSize,
+            "page": i,
+        }
+        response = requests.get(url, params=params, headers=headers, verify=False)
+        i += 1
+        data = response.json()
+        if "data" in data:
+            for x in data["data"]:
+                dataset_id = x["id"]
+                dataset_identifiers = x["identifiers"]
+                for identifier in dataset_identifiers:
+                    all_existing_datasets_identifier_id_map[identifier] = dataset_id
+            has_more = len(data["data"]) > 0
+        else:
+            print(f"API error: {response.status_code} - {response.text}")
+
+    return all_existing_datasets_identifier_id_map
+
+
+@timer
+def debug_delete_datasets(datasets_to_delete,all_existing_datasets_identifier_id_map):
+    headers = {"Authorization": API_TOKEN, "Content-Type": "application/json"}
+    for dataset in datasets_to_delete:
+        identifier = dataset["identifiers"][0]
+        if identifier not in all_existing_datasets_identifier_id_map.keys():
+            continue
+        dataset_id = all_existing_datasets_identifier_id_map[identifier]
+        try:
+            change_level_i14y(dataset_id, 'Internal', API_TOKEN)
+        except:
+            pass
+        url = f"{API_BASE_URL_ABN}/datasets/{dataset_id}"
+        response = requests.delete(url, headers=headers, verify=False)
+
+        if response.status_code in [200, 204]:
+            print(f"Successfully deleted dataset: {identifier}")
+        else:
+            print(f"Failed to delete dataset {identifier}: {response.status_code} - {response.text}")
+
+
+@timer
 def check_dataset_exists(identifier: str) -> str:
     """Checks if a dataset with the given identifier already exists."""
     url = f"{API_BASE_URL_ABN}/datasets"
@@ -129,6 +189,7 @@ def check_dataset_exists(identifier: str) -> str:
         print(f"Error checking dataset existence for identifier {identifier}: {e}")
         return None
 
+@timer
 def change_status_i14y(id, status, token):
     """Change registration status of a dataset in i14y"""
     response = requests.put(
@@ -146,7 +207,7 @@ def change_status_i14y(id, status, token):
     response.raise_for_status()
     return response
 
-
+@timer
 def submit_to_api(payload, identifier=None, previous_ids=None):
     """Submits the dataset payload to the API."""
     headers = {
@@ -161,11 +222,14 @@ def submit_to_api(payload, identifier=None, previous_ids=None):
         response = requests.put(url, json=payload, headers=headers, verify=False)
         action = "updated"
     else:
+        payload["data"]["registrationStatus"] = "Recorded"
+        payload["data"]["publicationLevel"] = "Public"
         url = f"{API_BASE_URL_ABN}/datasets"
         response = requests.post(url, json=payload, headers=headers, verify=False)
-    
+
     if response.status_code not in [200, 201, 204]:
         raise Exception(f"API error: {response.status_code} - {response.text}")
+    
 
     return response.text, action
 
@@ -188,10 +252,11 @@ def parse_date(date_str):
     except (ValueError, TypeError):
         return None
 
+@timer
 def main():
     workspace = os.getcwd()
     path_to_data = os.path.join(workspace, 'OGD_OFS', 'data', 'dataset_ids.json')
-    
+
     try: 
         with open(path_to_data, 'r') as f:
             previous_ids = json.load(f)
@@ -199,7 +264,7 @@ def main():
     except FileNotFoundError:
         previous_ids = {}  
         print("No previous data found, starting fresh")
-    
+
     # Get yesterday's date in UTC+1
     utc_plus_1 = datetime.timezone(datetime.timedelta(hours=1))
     now_utc_plus_1 = datetime.datetime.now(utc_plus_1)
@@ -208,14 +273,21 @@ def main():
     created_datasets = []
     updated_datasets = []
     unchanged_datasets = []
-    
+
     print("Fetching datasets from API...")
     datasets = fetch_datasets_from_api()
-    
+
+
     print("\nStarting dataset import...\n")
-    
+
     current_source_identifiers = {dataset['identifiers'][0] for dataset in datasets}
-    
+
+    all_existing_datasets_identifier_id_map = (
+        get_all_existing_datasets_identifier_id_map(ORGANIZATION_ID)
+    )
+
+    # debug_delete_datasets(datasets,all_existing_datasets_identifier_id_map)
+
     for dataset in datasets:
         identifier = dataset['identifiers'][0]
         print(f"\nProcessing dataset: {identifier}")
@@ -224,19 +296,19 @@ def main():
 
         modified_date = parse_date(dataset.get('modified'))
         created_date = parse_date(dataset.get('issued', dataset.get('modified')))
-        
+
         try:
             is_new_dataset = identifier not in previous_ids
             is_updated_dataset = modified_date and modified_date > yesterday
-            
-            # If for some reason the log is not available, then the datasets we try 
+
+            # If for some reason the log is not available, then the datasets we try
             # to write but already exist will be noted as unchanged
-            existing_dataset_id = check_dataset_exists(identifier)
+            existing_dataset_id = all_existing_datasets_identifier_id_map[identifier] if identifier in all_existing_datasets_identifier_id_map.keys() else None
             if existing_dataset_id and not is_updated_dataset:
                 previous_ids[identifier] = {'id': existing_dataset_id} 
                 unchanged_datasets.append(identifier)
                 print(f"No changes detected for dataset: {identifier} (already exists)\n")
-            
+
             elif is_new_dataset or is_updated_dataset:
                 action = "created" if is_new_dataset else "updated"
                 print(f"{action.capitalize()} dataset detected: {identifier}")
@@ -249,28 +321,30 @@ def main():
                     created_datasets.append(identifier)
                     previous_ids[identifier] = {'id': response_id} 
 
-                    try:
-                        change_level_i14y(response_id, 'Public', API_TOKEN)  
-                        time.sleep(0.5)
-                        change_status_i14y(response_id, 'Recorded', API_TOKEN)
-                        print(f"Set i14y level to Public and status to Registered for {identifier}")
-                    except Exception as e:
-                        print(f"Error setting i14y level/status for {identifier}: {str(e)}")
+                    # try:
+                    #     change_level_i14y(response_id, 'Public', API_TOKEN)
+                    #     # time.sleep(0.5)
+                    #     change_status_i14y(response_id, 'Recorded', API_TOKEN)
+                    #     print(f"Set i14y level to Public and status to Registered for {identifier}")
+                    # except Exception as e:
+                    #     print(f"Error setting i14y level/status for {identifier}: {str(e)}")
                 elif action == "updated":
                     updated_datasets.append(identifier)
 
                 print(f"Success - Dataset {action}: {response_id}\n")
-                
+
             else:
                 unchanged_datasets.append(identifier)
                 print(f"No changes detected for dataset: {identifier}\n")
 
         except Exception as e:
             print(f"Error processing dataset {identifier}: {str(e)}\n")
+            # Temporary traceback print
+            print(traceback.format_exc())
 
         # Find datasets that exist in previous_ids but not in current source
     datasets_to_delete = set(previous_ids.keys()) - current_source_identifiers
-    
+
     deleted_datasets = []
     for identifier in datasets_to_delete:
         try:
@@ -282,13 +356,13 @@ def main():
             try:
                 change_level_i14y(dataset_id, 'Internal', API_TOKEN)
                 print(f"Changed publication level to Internal for {identifier}")
-                time.sleep(0.5)  # Small delay to ensure the change propagates
+                # time.sleep(0.5)  # Small delay to ensure the change propagates
             except Exception as e:
                 print(f"Error changing publication level for {identifier}: {str(e)}")
                 continue  # Skip deletion if we can't change the level
             url = f"{API_BASE_URL_ABN}/datasets/{dataset_id}"
             response = requests.delete(url, headers=headers, verify=False)
-            
+
             if response.status_code in [200, 204]:
                 deleted_datasets.append(identifier)
                 del previous_ids[identifier]
@@ -297,15 +371,15 @@ def main():
                 print(f"Failed to delete dataset {identifier}: {response.status_code} - {response.text}")
         except Exception as e:
             print(f"Error deleting dataset {identifier}: {str(e)}")
-    
+
     #        Code to do a manual update of all datasets
     # for dataset in datasets:
     #     identifier = dataset['identifiers'][0]
     #     print(f"\nProcessing dataset: {identifier}")
-    
+
     #     try:
     #         payload = create_dataset_payload(dataset)
-            
+
     #         # Check if we know this dataset
     #         if identifier in previous_ids:
     #             # Force update existing dataset
@@ -316,22 +390,22 @@ def main():
     #             response_id, action = submit_to_api(payload)
     #             created_datasets.append(identifier)
     #             previous_ids[identifier] = {'id': response_id.strip('"')}
-                
+
     #             # Set initial status for new datasets
     #             try:
-    #                 change_level_i14y(response_id, 'Public', API_TOKEN)  
+    #                 change_level_i14y(response_id, 'Public', API_TOKEN)
     #                 time.sleep(0.5)
     #                 change_status_i14y(response_id, 'Recorded', API_TOKEN)
     #             except Exception as e:
     #                 print(f"Error setting initial status: {str(e)}")
-                    
+
     #         print(f"Success - Dataset {action}: {response_id}\n")
-            
+
     #     except Exception as e:
-    #         print(f"Error processing dataset {identifier}: {str(e)}\n") 
-    
+    #         print(f"Error processing dataset {identifier}: {str(e)}\n")
+
     os.makedirs(os.path.dirname(path_to_data), exist_ok=True)
-  
+
     with open(path_to_data, 'w') as f:
         json.dump(previous_ids, f)
 
@@ -354,8 +428,7 @@ def main():
     log_path = os.path.join(workspace, 'harvest_log.txt')
     with open(log_path, 'w') as f:
         f.write(log)
-    
-    
+
     print("\n=== Import Summary ===")
     print(f"Total processed: {len(datasets)}")
     print(f"Created: {len(created_datasets)}")
