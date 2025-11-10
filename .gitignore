@@ -7,4 +7,5 @@ src/local_testing/certificate_PROD.crt
 src/local_testing/dataset_ids_copy.json
 src/local_testing/dataset_ids.json
 src/__pycache__
-./harvest_log.txt
+harvest_log.txt
+OGD_OFS/data/*

@@ -6,14 +6,17 @@ import json
 import os
 import time
 import requests
-from config import API_BASE_URL_ABN
+import urllib3
+from config import API_BASE_URL_ABN, API_TOKEN
 from config_structures import DATASET_IDS_PATH, USE_DATASET_LIST  # Explicitly import required variables
 from datetime import datetime
 from rdflib import Graph, Namespace, RDF, URIRef, Literal
 from rdflib.namespace import SH, RDFS, XSD, DCTERMS
 from typing import Dict, List
 from format_importers import get_suitable_importer
+from utils import timer
 
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 def create_datasets_to_process(harvest_log_path: str, dataset_ids_path: str) -> List[str]:
     """
@@ -155,7 +158,7 @@ class StructureImporter:
             print(f"Uploading structure to {url}...")  # Debugging: Print the URL
             #print(f"Headers: {headers}")
             #print(f"Files: {files}")
-            response = requests.post(url, headers=headers, files=files, verify='src/local_testing/certificate_ABN.crt', timeout=30)
+            response = requests.post(url, headers=headers, files=files, verify=False, timeout=30)
             
             if response.status_code in [200, 201, 204]:
                 print(f"    Structure uploaded: {response.text.strip()}")
@@ -177,7 +180,7 @@ class StructureImporter:
         url = f"{self.base_url}/datasets/{dataset_id}/structures"
         
         try:
-            response = requests.delete(url, headers=headers, verify='src/local_testing/certificate_ABN.crt', timeout=30)
+            response = requests.delete(url, headers=headers, verify=False, timeout=30)
             if response.status_code in [200, 204]:
                 print(f"Structure for dataset {dataset_id} deleted successfully.")
                 return True
@@ -201,7 +204,7 @@ class StructureImporter:
         url = f"{API_BASE_URL_ABN}/datasets/{dataset_id}"
         
         try:
-            response = requests.get(url, headers=headers, verify='src/local_testing/certificate_ABN.crt', timeout=30)
+            response = requests.get(url, headers=headers, verify=False, timeout=30)
             if response.status_code == 200:
                 return response.json()
             else:
@@ -322,7 +325,7 @@ class StructureImporter:
                 print(f"  Error: {str(e)}")
                 errors += 1
 
-            time.sleep(0.5)  # Rate limiting
+            # time.sleep(0.5)  # Rate limiting
 
         # Print summary
         print(f"\n=== Summary ===")
@@ -345,10 +348,10 @@ class StructureImporter:
         print("Log saved to structure_import_log.txt")
 
 
+@timer
 def main():
     """Main execution"""
-    #api_token = os.getenv('ACCESS_TOKEN')
-    api_token = "xxxx"
+    api_token = API_TOKEN
     if not api_token:
         print("ERROR: ACCESS_TOKEN environment variable not set")
         return
