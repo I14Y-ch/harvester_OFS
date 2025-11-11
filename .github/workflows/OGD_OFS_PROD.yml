@@ -1,9 +1,8 @@
 name: ABN - I14Y Harvester OGD Office Fédéral de Statistique catalogue 
 
 on:
-  # TODO Sergiy: decomment schedule after checks
-  # schedule:
-  #   - cron: '0 0 * * *'  # Runs everyday at midnight
+  schedule:
+    - cron: '0 0 * * *'  # Runs everyday at midnight
   workflow_dispatch:  # Allows manual triggering
 
 jobs:
@@ -19,7 +18,7 @@ jobs:
       continue-on-error: true
       with:
           name: dataset_ids
-          workflow: OGD_OFS.yml
+          workflow: OGD_OFS_ABN.yml
           workflow_conclusion: success
           if_no_artifact_found: warn
           path: OGD_OFS/data
@@ -34,11 +33,11 @@ jobs:
 
     - name: Run harvester script
       env:
-        CLIENT_KEY: ${{ secrets.CLIENT_ID_ABN }}
-        CLIENT_SECRET: ${{ secrets.CLIENT_SECRET_ABN }}
-        GET_TOKEN_URL: "https://identity-a.bit.admin.ch/realms/bfs-sis-a/protocol/openid-connect/token"
-        API_BASE_URL: "https://api-a.i14y.admin.ch/api/partner/v1"
-        IMPORT_STRUCTURES: "True"
+        CLIENT_KEY: ${{ secrets.CLIENT_ID_PROD }}
+        CLIENT_SECRET: ${{ secrets.CLIENT_SECRET_PROD }}
+        GET_TOKEN_URL: "https://identity.bit.admin.ch/realms/bfs-sis-p/protocol/openid-connect/token"
+        API_BASE_URL: "https://api.i14y.admin.ch/api/partner/v1"
+        IMPORT_STRUCTURES: "False"
       run: python src/harvester.py
     
     - name: Upload log
