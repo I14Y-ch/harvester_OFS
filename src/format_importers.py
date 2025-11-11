@@ -11,8 +11,19 @@ from typing import Dict, List, Optional
 import chardet
 import urllib
 
+class FormatImporter:
+    """Common functions for all importers"""
+    def get_access_url(self, distribution: Dict) -> Optional[str]:
+        """Get access URL from distribution"""
+        if isinstance(distribution.get('accessUrl'), dict):
+            return distribution['accessUrl'].get('uri')  # Extract 'uri' field
+        elif isinstance(distribution.get('downloadUrl'), dict):
+            return distribution['downloadUrl'].get('uri')  # Extract 'uri' field
+        else:
+            # Return accessUrl or downloadUrl directly if they are strings
+            return distribution.get('accessUrl') or distribution.get('downloadUrl')
 
-class PXImporter:
+class PXImporter(FormatImporter):
     """Handles PX file operations"""
 
     def can_process(self, distribution: Dict) -> bool:
@@ -23,16 +34,6 @@ class PXImporter:
 
         clean_url = access_url.split('?')[0].split('#')[0]
         return bool(re.search(r'px-x-\d+_\d+', clean_url, re.IGNORECASE))
-
-    def get_access_url(self, distribution: Dict) -> Optional[str]:
-        """Get access URL from distribution"""
-        if isinstance(distribution.get('accessUrl'), dict):
-            return distribution['accessUrl'].get('uri')  # Extract 'uri' field
-        elif isinstance(distribution.get('downloadUrl'), dict):
-            return distribution['downloadUrl'].get('uri')  # Extract 'uri' field
-        else:
-            # Return accessUrl or downloadUrl directly if they are strings
-            return distribution.get('accessUrl') or distribution.get('downloadUrl')
 
     def get_identifier(self, distribution: Dict) -> Optional[str]:
         """Get unique identifier for this file"""
@@ -171,7 +172,7 @@ class PXImporter:
         return result or 'property'
 
 
-class CSVImporter:
+class CSVImporter(FormatImporter):
     """Handles CSV file operations"""
     
     def can_process(self, distribution: Dict) -> bool:
@@ -203,16 +204,6 @@ class CSVImporter:
             return True
         
         return False
-    
-    def get_access_url(self, distribution: Dict) -> Optional[str]:
-        """Get access URL from distribution"""
-        if isinstance(distribution.get('accessUrl'), dict):
-            return distribution['accessUrl'].get('uri')  # Extract 'uri' field
-        elif isinstance(distribution.get('downloadUrl'), dict):
-            return distribution['downloadUrl'].get('uri')  # Extract 'uri' field
-        else:
-            # Return accessUrl or downloadUrl directly if they are strings
-            return distribution.get('accessUrl') or distribution.get('downloadUrl')
     
     def get_identifier(self, distribution: Dict) -> Optional[str]:
         """Get unique identifier for this file"""
@@ -346,7 +337,7 @@ class CSVImporter:
 
 # Registry of available importers
 IMPORTERS = {
-    # "px": PXImporter, #TODO Sergiy: decomment
+    "px": PXImporter,
     "csv": CSVImporter,
     # Add more importers here:
     # "json": JSONImporter,

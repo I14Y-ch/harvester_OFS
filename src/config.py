@@ -5,29 +5,18 @@ API_OFS_URL = "https://dam-api.bfs.admin.ch/hub/api/ogd/harvest"
 
 # I14Y API configuration
 API_BASE_URL_DEV = "https://iop-partner-d.app.cfap02.atlantica.admin.ch/api"
-API_BASE_URL = API_BASE_URL_DEV
-API_BASE_URL_ABN = API_BASE_URL_DEV
-# Sergiy: Temporary overwrite of API URL in order to not break anything TODO: don't forget to revert back
-# API_BASE_URL = "https://api.i14y.admin.ch/api/partner/v1"
-# API_BASE_URL_ABN = "https://api-a.i14y.admin.ch/api/partner/v1"
+API_BASE_URL = "https://api.i14y.admin.ch/api/partner/v1"
+API_BASE_URL_ABN = "https://api-a.i14y.admin.ch/api/partner/v1"
 
-API_TOKEN = f"{os.environ['ACCESS_TOKEN']}"
-
-#IDS_I14Y = json.loads(os.environ['IDS_I14Y'])
+GET_TOKEN_URL_DEV = "https://identity-eiam-r.eiam.admin.ch/realms/edi_bfs-i14y"
+GET_TOKEN_URL_ABN = "https://identity-a.bit.admin.ch/realms/bfs-sis-a/protocol/openid-connect/token"
+GET_TOKEN_URL_PROD = "https://identity.bit.admin.ch/realms/bfs-sis-p/protocol/openid-connect/token"
 
 # Organization settings
-# Sergiy: Temporary use test organization TODO: don't forget to revert back
-# ORGANIZATION_ID =  "CH1"
-ORGANIZATION_ID ="i14y-test-organisation"
+ORGANIZATION_ID =  "CH1"
 DEFAULT_PUBLISHER = {
     "identifier": ORGANIZATION_ID
 }
 
 # File format (.xml and .rdf -> "xml", .ttl -> "ttl")
 FILE_FORMAT = "xml"
-
-# Proxies if necessary 
-PROXIES = {
-    "http": "http://proxy...",
-    "https": "http://proxy..."
-}

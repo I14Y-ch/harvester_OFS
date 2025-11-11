@@ -1,0 +1,55 @@
+name: ABN - I14Y Harvester OGD Office Fédéral de Statistique catalogue 
+
+on:
+  # TODO Sergiy: decomment schedule after checks
+  # schedule:
+  #   - cron: '0 0 * * *'  # Runs everyday at midnight
+  workflow_dispatch:  # Allows manual triggering
+
+jobs:
+  harvest-data:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Download previous data
+      uses: dawidd6/action-download-artifact@v4
+      continue-on-error: true
+      with:
+          name: dataset_ids
+          workflow: OGD_OFS.yml
+          workflow_conclusion: success
+          if_no_artifact_found: warn
+          path: OGD_OFS/data
+        
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.9'
+
+    - name: Install dependencies
+      run: pip install -r requirements.txt
+
+    - name: Run harvester script
+      env:
+        CLIENT_KEY: ${{ secrets.CLIENT_ID_ABN }}
+        CLIENT_SECRET: ${{ secrets.CLIENT_SECRET_ABN }}
+        GET_TOKEN_URL: "https://identity-a.bit.admin.ch/realms/bfs-sis-a/protocol/openid-connect/token"
+        API_BASE_URL: "https://api-a.i14y.admin.ch/api/partner/v1"
+        IMPORT_STRUCTURES: "True"
+      run: python src/harvester.py
+    
+    - name: Upload log
+      uses: actions/upload-artifact@v4
+      with:
+        name: harvest-log
+        path: harvest_log.txt
+
+    - name: Upload updated data
+      uses: actions/upload-artifact@v4
+      with:
+        name: dataset_ids
+        path: OGD_OFS/data/dataset_ids.json
+        retention-days: 2
