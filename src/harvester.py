@@ -158,14 +158,11 @@ class HarvesterOFS(CommonI14YAPI):
             response = requests.put(url, json=payload, headers=headers, verify=False)
             action = "updated"
         else:
-            payload["data"]["registrationStatus"] = "Recorded"
-            payload["data"]["publicationLevel"] = "Public"
             url = f"{self.api_base_url}/datasets"
             response = requests.post(url, json=payload, headers=headers, verify=False)
 
         if response.status_code not in {200, 201, 204}:
             response.raise_for_status()
-            # raise requests.HTTPError(f"API error: {response.status_code} - {response.text}")
 
         return response.text, action
 
@@ -260,6 +257,8 @@ class HarvesterOFS(CommonI14YAPI):
                         if action == "created":
                             created_datasets.append(identifier)
                             previous_ids[identifier] = {"id": response_id}
+                            self.change_level_i14y(response_id, 'Public')
+                            self.change_status_i14y(response_id, 'Recorded')
 
                         elif action == "updated":
                             updated_datasets.append(identifier)
