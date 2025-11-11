@@ -18,7 +18,7 @@ jobs:
       continue-on-error: true
       with:
           name: dataset_ids
-          workflow: OGD_OFS_ABN.yml
+          workflow: OGD_OFS.yml
           workflow_conclusion: success
           if_no_artifact_found: warn
           path: OGD_OFS/data
