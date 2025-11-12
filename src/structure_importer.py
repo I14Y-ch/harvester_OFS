@@ -3,6 +3,7 @@ Extensible structure importer - works with any format importer
 """
 
 import json
+import os
 import traceback
 import requests
 import urllib3
@@ -11,6 +12,7 @@ from datetime import datetime
 from rdflib import Graph, Namespace, RDF, Literal
 from rdflib.namespace import SH, RDFS, XSD, DCTERMS
 from typing import Dict, List
+from config import ORGANIZATION_ID
 from format_importers import get_suitable_importer
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -71,34 +73,36 @@ class StructureImporter(CommonI14YAPI):
         return datasets_to_process
 
     @staticmethod
-    def execute(api_params: Dict):
+    def execute(api_params: Dict, import_all: bool = False):
         """Main execution"""
+        # If import_all=True we import structures for all the datasets and not only those updated and created by the harvester (useful for first run)
 
-        # Create datasets to process from the harvest log
-        dataset_ids_path_harvesting = "OGD_OFS/data/dataset_ids.json"
-        harvest_log_path = "harvest_log.txt"
-
-        try:
-            with open(dataset_ids_path_harvesting, "r") as f:
-                dataset_ids = json.load(f)
-        except FileNotFoundError:
-            print(f"ERROR: {dataset_ids_path_harvesting} not found")
-            return
-
-        datasets_to_process_ids = StructureImporter.create_datasets_to_process(
-            harvest_log_path, dataset_ids_path_harvesting
-        )
-
-        # Build the datasets_to_process dictionary
         datasets_to_process = {}
-        for ds_id in datasets_to_process_ids:
-            if ds_id in dataset_ids:
-                datasets_to_process[ds_id] = dataset_ids[ds_id]
+
+        if not import_all:
+            # Create datasets to process from the harvest log
+            dataset_ids_path_harvesting = "OGD_OFS/data/dataset_ids.json"
+            harvest_log_path = "harvest_log.txt"
+
+            try:
+                with open(dataset_ids_path_harvesting, "r") as f:
+                    dataset_ids = json.load(f)
+            except FileNotFoundError:
+                print(f"ERROR: {dataset_ids_path_harvesting} not found")
+                return
+
+            datasets_to_process_ids = StructureImporter.create_datasets_to_process(harvest_log_path, dataset_ids_path_harvesting)
+
+            # Build the datasets_to_process dictionary
+            
+            for ds_id in datasets_to_process_ids:
+                if ds_id in dataset_ids:
+                    datasets_to_process[ds_id] = dataset_ids[ds_id]
 
         # print(f"Datasets to process: {len(datasets_to_process)}")
 
         importer = StructureImporter(api_params)
-        importer.run_import(datasets_to_process)
+        importer.run_import(datasets_to_process, import_all=import_all)
 
     # api_params:
     # - client_key: client key to generate token
@@ -314,13 +318,15 @@ class StructureImporter(CommonI14YAPI):
             print(f"  Error processing {file_id}: {str(e)}")
             return False
 
-    def run_import(self, datasets_to_process: Dict[str, Dict]):
+    def run_import(self, datasets_to_process: Dict[str, Dict], import_all: bool = False):
         """
         Main import process with harvest log awareness.
 
         Args:
             datasets_to_process (Dict[str, Dict]): A dictionary of datasets to process, where the key is the dataset ID
                                                    and the value is the dataset metadata.
+            import_all (bool):  if True we import structures for all the datasets and not only those updated and created by the harvester (useful for first run)
+                                if False we import structures only for datasets updated or created by the harvester
         """
         # Statistics
         processed = 0
@@ -329,9 +335,12 @@ class StructureImporter(CommonI14YAPI):
         errors = 0
 
         print("Starting extensible structure import...")
-        print(f"Datasets to process: {len(datasets_to_process)}")
-
         self.id_dataset_map = self.build_id_dataset_map()
+
+        if import_all:
+            datasets_to_process = self.id_dataset_map
+
+        print(f"Datasets to process: {len(datasets_to_process)}")
 
         # Process datasets
         for identifier, data in datasets_to_process.items():
@@ -371,3 +380,17 @@ class StructureImporter(CommonI14YAPI):
             f.write(log_content)
 
         print("Log saved to structure_import_log.txt")
+
+
+if __name__=="__main__":
+    api_params = {
+        "client_key": os.environ["CLIENT_KEY"],
+        "client_secret": os.environ["CLIENT_SECRET"],
+        "api_get_token_url": os.environ["GET_TOKEN_URL"],
+        "api_base_url": os.environ["API_BASE_URL"],
+        "organization_id": ORGANIZATION_ID,
+    }
+    
+    import_all = os.environ.get("IMPORT_ALL", "False") == "True"
+
+    StructureImporter.execute(api_params, import_all=import_all)
