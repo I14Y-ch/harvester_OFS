@@ -1,3 +1,4 @@
+from enum import Enum
 import requests
 from common import CommonI14YAPI, reauth_if_token_expired
 from config import *
@@ -11,20 +12,22 @@ from typing import Dict, Any, List
 import datetime
 import urllib3
 import traceback
-
 from structure_importer import StructureImporter
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
+
 class HarvesterOFS(CommonI14YAPI):
 
-    # api_params:
-    # - client_key: client key to generate token
-    # - client_secret: client secret to generate token
-    # - api_get_token_url: url to generate token
-    # - api_base_url: url for i14y api calls
-    # - organization: i14y organization
     def __init__(self, api_params):
+        """
+        api_params must be a dict containing:
+        - client_key: client key to generate token
+        - client_secret: client secret to generate token
+        - api_get_token_url: url to generate token
+        - api_base_url: url for i14y api calls
+        - organization: i14y organization
+        """
         super().__init__(api_params)
 
     def fetch_datasets_from_api(self) -> List[Dict]:
@@ -136,6 +139,20 @@ class HarvesterOFS(CommonI14YAPI):
         response.raise_for_status()
         return response
 
+    @reauth_if_token_expired
+    def delete_i14y(self, dataset_id):
+        headers = {"Authorization": self.api_token, "Content-Type": "application/json"}
+        try:
+            url_structures = f"{self.api_base_url}/datasets/{dataset_id}/structures"
+            requests.delete(url_structures, headers=headers, verify=False)
+        except requests.HTTPError as e:
+            print(f"Error trying to delete structure: {e.response.status_code} - {e.response.text}")
+        url = f"{self.api_base_url}/datasets/{dataset_id}"
+        response = requests.delete(url, headers=headers, verify=False)
+        response.raise_for_status()
+
+        return response
+
     def get_all_identifier_id_map(self, datasets):
         all_existing_datasets_identifier_id_map = {}
         for dataset in datasets:
@@ -185,43 +202,57 @@ class HarvesterOFS(CommonI14YAPI):
             return None
 
     def harvest(self):
-        workspace = os.getcwd()
-        path_to_data = os.path.join(workspace, "OGD_OFS", "data", "dataset_ids.json")
-
-        try:
-            with open(path_to_data, "r") as f:
-                previous_ids = json.load(f)
-                print("Successfully loaded previous data")
-        except FileNotFoundError:
-            previous_ids = {}
-            print("No previous data found, starting fresh")
 
         # Get yesterday's date in UTC+1
         utc_plus_1 = datetime.timezone(datetime.timedelta(hours=1))
         now_utc_plus_1 = datetime.datetime.now(utc_plus_1)
         yesterday = now_utc_plus_1 - datetime.timedelta(days=1)
 
-        created_datasets = []
-        updated_datasets = []
-        unchanged_datasets = []
-        deleted_datasets = []
+        """
+        This dict has as key the status of the dataset (created/updated/unchanged/deleted/exception)
+            created/updated/unchanged/deleted contains a dict with the bfs identifier as key and i14y id as value
+            exception contains a list of bfs identifiers because they weren't uploaded to i14y
+        dataset_status_identifier_id_map : {
+            "created" : {
+                "bfs_identifier": i14y_id
+            },
+            "updated" : {
+                "bfs_identifier": i14y_id
+            },
+            "unchanged" : {
+                "bfs_identifier": i14y_id
+            },
+            "deleted" : {
+                "bfs_identifier": i14y_id
+            },
+            "exception" : [
+                "bfs_identifier"
+            ]
+        }
+        """
+        dataset_status_identifier_id_map = {
+            "created": {},
+            "updated": {},
+            "unchanged": {},
+            "deleted": {},
+            "exception": [],
+        }
         encountered_exception = False
 
         try:
 
             print("Fetching datasets from API...")
-            
-            datasets = self.fetch_datasets_from_api()
+
+            datasets_bfs = self.fetch_datasets_from_api()
 
             print("\nStarting dataset import...\n")
 
-            current_source_identifiers = {dataset["identifiers"][0] for dataset in datasets}
+            current_source_identifiers = {dataset["identifiers"][0] for dataset in datasets_bfs}
             all_existing_datasets = self.get_all_existing_datasets(self.organization)
-
 
             all_existing_datasets_identifier_id_map = self.get_all_identifier_id_map(all_existing_datasets)
 
-            for dataset in datasets:
+            for dataset in datasets_bfs:
                 identifier = dataset["identifiers"][0]
                 print(f"\nProcessing dataset: {identifier}")
                 print(f"Issued date: {dataset.get('issued')}")
@@ -231,19 +262,17 @@ class HarvesterOFS(CommonI14YAPI):
                 created_date = self.parse_date(dataset.get("issued", dataset.get("modified")))
 
                 try:
-                    is_new_dataset = identifier not in previous_ids.keys()
+                    is_new_dataset = identifier not in all_existing_datasets_identifier_id_map.keys()
                     is_updated_dataset = modified_date and modified_date > yesterday
 
-                    # If for some reason the log is not available, then the datasets we try
-                    # to write but already exist will be noted as unchanged
                     existing_dataset_id = (
                         all_existing_datasets_identifier_id_map[identifier]
                         if identifier in all_existing_datasets_identifier_id_map.keys()
                         else None
                     )
+
                     if existing_dataset_id and not is_updated_dataset:
-                        previous_ids[identifier] = {"id": existing_dataset_id}
-                        unchanged_datasets.append(identifier)
+                        dataset_status_identifier_id_map["unchanged"][identifier] = existing_dataset_id
                         print(f"No changes detected for dataset: {identifier} (already exists)\n")
 
                     elif is_new_dataset or is_updated_dataset:
@@ -251,47 +280,45 @@ class HarvesterOFS(CommonI14YAPI):
                         print(f"{action.capitalize()} dataset detected: {identifier}")
 
                         payload = self.create_dataset_payload(dataset)
-                        response_id, action = self.submit_to_api(payload, identifier, previous_ids)
+                        response_id, action = self.submit_to_api(
+                            payload, identifier, all_existing_datasets_identifier_id_map
+                        )
                         response_id = response_id.strip('"')
 
                         if action == "created":
-                            created_datasets.append(identifier)
-                            previous_ids[identifier] = {"id": response_id}
-                            self.change_level_i14y(response_id, 'Public')
-                            self.change_status_i14y(response_id, 'Recorded')
+                            dataset_status_identifier_id_map["created"][identifier] = response_id
+                            self.change_level_i14y(response_id, "Public")
+                            self.change_status_i14y(response_id, "Recorded")
 
                         elif action == "updated":
-                            updated_datasets.append(identifier)
+                            dataset_status_identifier_id_map["updated"][identifier] = response_id
 
                         print(f"Success - Dataset {action}: {response_id}\n")
-
-                    else:
-                        unchanged_datasets.append(identifier)
-                        print(f"No changes detected for dataset: {identifier}\n")
 
                 except Exception as e:
                     print(f"Error processing dataset {identifier}: {str(e)}\n")
                     print(traceback.format_exc())
 
             # Find datasets that exist in previous_ids but not in current source
-            datasets_to_delete = set(previous_ids.keys()) - current_source_identifiers
+            datasets_to_delete = set(all_existing_datasets_identifier_id_map.keys()) - current_source_identifiers
 
             for identifier in datasets_to_delete:
                 try:
-                    dataset_id = previous_ids[identifier]["id"]
-                    headers = {"Authorization": self.api_token, "Content-Type": "application/json"}
+                    dataset_id = all_existing_datasets_identifier_id_map[identifier]
+
                     try:
                         self.change_level_i14y(dataset_id, "Internal")
                         print(f"Changed publication level to Internal for {identifier}")
-                    except Exception as e:
-                        print(f"Error changing publication level for {identifier}: {str(e)}")
-                        continue  # Skip deletion if we can't change the level
-                    url = f"{self.api_base_url}/datasets/{dataset_id}"
-                    response = requests.delete(url, headers=headers, verify=False)
+                    except requests.HTTPError as e:
+                        print(f"Error changing publication level for {identifier}: {e.response.text}")
+                        # TODO: if Status 405 means that the resource has already Internal publication level, it would be better to check status and not error message
+                        if "The resource already has its publication level set to" not in str(e.response.text):
+                            continue  # Skip deletion if we can't change the level
 
-                    if response.status_code in {200, 204}:
-                        deleted_datasets.append(identifier)
-                        del previous_ids[identifier]
+                    response = self.delete_i14y(dataset_id)
+
+                    if response and response.status_code in {200, 204}:
+                        dataset_status_identifier_id_map["deleted"][identifier] = dataset_id
                         print(f"Successfully deleted dataset: {identifier}")
                     else:
                         print(f"Failed to delete dataset {identifier}: {response.status_code} - {response.text}")
@@ -306,54 +333,54 @@ class HarvesterOFS(CommonI14YAPI):
         finally:
             # If the amount of harvested datasets > the amount of processed datasets it means that there was an exception
             # (we explicitly mark datasets as created, updated, deleted or unchanged, so if a dataset is not marked there was an error)
-            encountered_exception |= len(datasets) > len(created_datasets) + len(updated_datasets) + len(
-                unchanged_datasets
-            ) + len(deleted_datasets)
-            os.makedirs(os.path.dirname(path_to_data), exist_ok=True)
+            encountered_exception |= len(current_source_identifiers) > sum(
+                [
+                    len(dataset_status_identifier_id_map[action])
+                    for action in ["created", "updated", "unchanged", "deleted"]
+                ]
+            )
 
-            with open(path_to_data, "w") as f:
-                json.dump(previous_ids, f)
+            # The dataset identifiers that had an exception are those that were in datasets_bfs
+            # but not in dataset_status_identifier_id_map['created'/'updated'/'unchanged'/'deleted']
+            dataset_status_identifier_id_map["exception"] = list(
+                current_source_identifiers
+                - set().union(
+                    *[
+                        dataset_status_identifier_id_map[action].keys()
+                        for action in ["created", "updated", "unchanged", "deleted"]
+                    ]
+                )
+            )
 
             # Create log
             log = f"Harvest completed successfully at {datetime.datetime.now()}\n"
             if encountered_exception:
                 log = f"Harvest encountered exception at {datetime.datetime.now()}\n"
-            log += "Created datasets:\n"
-            for item in created_datasets:
-                log += f"\n- {item}"
-            log += "\nUpdated datasets:\n"
-            for item in updated_datasets:
-                log += f"\n- {item}"
-            log += "\nUnchanged datasets:\n"
-            for item in unchanged_datasets:
-                log += f"\n- {item}"
-            log += "\nDeleted datasets:\n"
-            for item in deleted_datasets:
-                log += f"\n- {item}"
+            for action in ["created", "updated", "unchanged", "deleted"]:
+                log += f"{action.capitalize()} datasets ([bfs identifier] : [i14y id]):\n"
+                for bfs_identifier, i14y_id in dataset_status_identifier_id_map[action].items():
+                    log += f"\n- {bfs_identifier} : {i14y_id}"
 
             if encountered_exception:
-                log += "\nDatasets with exception:\n"
-                for item in (
-                    set([x["identifiers"][0] for x in datasets])
-                    - set(created_datasets)
-                    - set(updated_datasets)
-                    - set(unchanged_datasets)
-                    - set(deleted_datasets)
-                ):
-                    log += f"\n- {item}"
+                log += "\nDatasets with exception ([bfs identifier]):\n"
+                for bfs_identifier in dataset_status_identifier_id_map["exception"]:
+                    log += f"\n- {bfs_identifier}"
 
             # Save log in root directory
+            workspace = os.getcwd()
             log_path = os.path.join(workspace, "harvest_log.txt")
             with open(log_path, "w") as f:
                 f.write(log)
 
             print("\n=== Import Summary ===")
-            print(f"Total processed: {len(datasets)}")
-            print(f"Created: {len(created_datasets)}")
-            print(f"Updated: {len(updated_datasets)}")
-            print(f"Unchanged: {len(unchanged_datasets)}")
-            print(f"Deleted: {len(deleted_datasets)}")
+            print(f"Total processed: {len(datasets_bfs)}")
+            for action in ["created", "updated", "unchanged", "deleted", "exception"]:
+                print(f"Total {action.capitalize()}: {len(dataset_status_identifier_id_map[action])}")
+
             print(f"Log saved to: {log_path}")
+
+            path_to_data = os.path.join(workspace, "OGD_OFS", "data", "datasets.json")
+            self.save_data(dataset_status_identifier_id_map, path_to_data)
 
 
 if __name__ == "__main__":

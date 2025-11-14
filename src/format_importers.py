@@ -11,17 +11,34 @@ from typing import Dict, List, Optional
 import chardet
 import urllib
 
+
 class FormatImporter:
     """Common functions for all importers"""
+
     def get_access_url(self, distribution: Dict) -> Optional[str]:
         """Get access URL from distribution"""
-        if isinstance(distribution.get('accessUrl'), dict):
-            return distribution['accessUrl'].get('uri')  # Extract 'uri' field
-        elif isinstance(distribution.get('downloadUrl'), dict):
-            return distribution['downloadUrl'].get('uri')  # Extract 'uri' field
+        if isinstance(distribution.get("accessUrl"), dict):
+            return distribution["accessUrl"].get("uri")  # Extract 'uri' field
+        elif isinstance(distribution.get("downloadUrl"), dict):
+            return distribution["downloadUrl"].get("uri")  # Extract 'uri' field
         else:
             # Return accessUrl or downloadUrl directly if they are strings
-            return distribution.get('accessUrl') or distribution.get('downloadUrl')
+            return distribution.get("accessUrl") or distribution.get("downloadUrl")
+
+    def decode_content(self, raw_content: bytes):
+        detected_encoding = chardet.detect(raw_content)["encoding"]
+        print(f"Detected encoding: {detected_encoding}")  # Debugging: Log detected encoding
+
+        # Decode content using detected encoding
+        try:
+            content = raw_content.decode(detected_encoding or "utf-8")
+        except (UnicodeDecodeError, LookupError):
+            # Fallback to UTF-8 with replacement for invalid characters
+            content = raw_content.decode("utf-8", errors="replace")
+            print("Warning: Failed to decode with detected encoding. Falling back to UTF-8 with replacement.")
+
+        return content
+
 
 class PXImporter(FormatImporter):
     """Handles PX file operations"""
@@ -32,8 +49,8 @@ class PXImporter(FormatImporter):
         if not access_url:
             return False
 
-        clean_url = access_url.split('?')[0].split('#')[0]
-        return bool(re.search(r'px-x-\d+_\d+', clean_url, re.IGNORECASE))
+        clean_url = access_url.split("?")[0].split("#")[0]
+        return bool(re.search(r"px-x-\d+_\d+", clean_url, re.IGNORECASE))
 
     def get_identifier(self, distribution: Dict) -> Optional[str]:
         """Get unique identifier for this file"""
@@ -44,11 +61,11 @@ class PXImporter(FormatImporter):
         path = urlparse(access_url).path
         basename = os.path.basename(path)
 
-        if '.' in basename:
-            basename = basename.split('.')[0]
+        if "." in basename:
+            basename = basename.split(".")[0]
 
         # Ensure the identifier matches the expected pattern
-        if re.match(r'px-x-\d+_\d+', basename.lower()):
+        if re.match(r"px-x-\d+_\d+", basename.lower()):
             return str(basename)  # Ensure it's a string
         return None
 
@@ -68,35 +85,23 @@ class PXImporter(FormatImporter):
             # We download only the first megabyte of data
             raw_content = urllib.request.urlopen(url).read(first_n_bytes)
 
-            detected_encoding = chardet.detect(raw_content)['encoding']
-            print(f"Detected encoding: {detected_encoding}")  # Debugging: Log detected encoding
-
-            # Decode content using detected encoding
-            try:
-                px_content = raw_content.decode(detected_encoding or 'utf-8')
-            except (UnicodeDecodeError, LookupError):
-                # Fallback to UTF-8 with replacement for invalid characters
-                px_content = raw_content.decode('utf-8', errors='replace')
-                print("Warning: Failed to decode with detected encoding. Falling back to UTF-8 with replacement.")
+            px_content = self.decode_content(raw_content)
 
             not_enough_bytes = "DATA=" not in px_content
             if not_enough_bytes:
                 first_n_bytes *= 2
-                print(f"DEBUG PXImporter: not enough bytes downloaded, DATA= not detected, first_n_bytes increased to {first_n_bytes}")
+                print(
+                    f"DEBUG PXImporter: not enough bytes downloaded, DATA= not detected, first_n_bytes increased to {first_n_bytes}"
+                )
 
         # Parse metadata
         return self.parse_px_content(px_content, px_id)
 
     def parse_px_content(self, px_content: str, px_id: str) -> Dict:
         """Parse PX file content"""
-        data = {
-            "identifier": px_id,
-            "title": {},
-            "description": {},
-            "properties": []
-        }
+        data = {"identifier": px_id, "title": {}, "description": {}, "properties": []}
 
-        lines = px_content.replace('\r\n', '\n').replace('\r', '\n')
+        lines = px_content.replace("\r\n", "\n").replace("\r", "\n")
 
         # Extract TITLE
         for match in re.finditer(r'TITLE(?:\[(\w+)\])?="(.*?)";', lines, re.DOTALL):
@@ -138,124 +143,119 @@ class PXImporter(FormatImporter):
             if dim_data:
                 first_name = next(iter(dim_data.values()))
                 prop_name = self.clean_property_name(first_name)
-                data["properties"].append({
-                    "name": prop_name,
-                    "labels": dim_data,
-                    "datatype": "string"
-                })
+                data["properties"].append({"name": prop_name, "labels": dim_data, "datatype": "string"})
 
         if heading_dimension:
             first_name = next(iter(heading_dimension.values()))
             prop_name = self.clean_property_name(first_name)
             # Check if it's a year
-            is_year = any('jahr' in name.lower() or 'year' in name.lower() 
-                         for name in heading_dimension.values())
-            data["properties"].append({
-                "name": prop_name,
-                "labels": heading_dimension,
-                "datatype": "gYear" if is_year else "string"
-            })
+            is_year = any("jahr" in name.lower() or "year" in name.lower() for name in heading_dimension.values())
+            data["properties"].append(
+                {"name": prop_name, "labels": heading_dimension, "datatype": "gYear" if is_year else "string"}
+            )
 
         return data
 
     def clean_property_name(self, name: str) -> str:
         """Convert to camelCase property name"""
-        name = re.sub(r'[^\w\s]', '', name)
+        name = re.sub(r"[^\w\s]", "", name)
         words = name.split()
         if not words:
-            return 'property'
+            return "property"
 
         result = words[0].lower()
         for word in words[1:]:
             result += word.capitalize()
 
-        return result or 'property'
+        return result or "property"
 
 
 class CSVImporter(FormatImporter):
     """Handles CSV file operations"""
-    
+
     def can_process(self, distribution: Dict) -> bool:
         """Check if this distribution is a CSV file"""
-        format_info = distribution.get('format', {})
-        media_type = distribution.get('mediaType', '')
+        format_info = distribution.get("format", {})
+        media_type = distribution.get("mediaType", "")
         access_url = self.get_access_url(distribution)
-        
-        csv_indicators = ['csv', 'text/csv', 'application/csv']
-        
+
+        csv_indicators = ["csv", "text/csv", "application/csv"]
+
         # Check format
         if isinstance(format_info, dict):
-            format_name = format_info.get('name', '').lower()
-            if any(indicator in format_name for indicator in csv_indicators):
-                return True
-        
+            format_name = format_info.get("name", "")
+            if isinstance(format_name, str):
+                format_name = format_name.lower()
+                if any(indicator in format_name for indicator in csv_indicators):
+                    return True
+            # If format_name is a dict, we use format_info['code']
+            elif isinstance(format_name, dict):
+                if "code" in format_info.keys():
+                    format_code = format_info["code"]
+                    if isinstance(format_code, str):
+                        format_code = format_code.lower()
+                        if any(indicator in format_code for indicator in csv_indicators):
+                            return True
+
         # Check media type
         if isinstance(media_type, dict):
             # Extract the 'code' field or fallback to an empty string
-            media_type_code = media_type.get('code', '').lower()
+            media_type_code = media_type.get("code", "").lower()
             if any(indicator in media_type_code for indicator in csv_indicators):
                 return True
         elif isinstance(media_type, str):
             if any(indicator in media_type.lower() for indicator in csv_indicators):
                 return True
-        
+
         # Check URL extension
-        if access_url and access_url.lower().endswith('.csv'):
+        if access_url and access_url.lower().endswith(".csv"):
             return True
-        
+
         return False
-    
+
     def get_identifier(self, distribution: Dict) -> Optional[str]:
         """Get unique identifier for this file"""
         access_url = self.get_access_url(distribution)
         if not access_url:
             return None
-    
+
         # Extract the last part of the URL path as the identifier
-        identifier = access_url.split('/')[-1].split('?')[0]
+        identifier = access_url.split("/")[-1].split("?")[0]
         return str(identifier) if identifier else None
-    
+
     def download_and_parse(self, distribution: Dict, first_n_bytes: int = 1024**2) -> Dict:
         """Download CSV file and extract structure"""
         access_url = self.get_access_url(distribution)
         if not access_url:
             raise Exception("No access URL found")
-        
+
         identifier = self.get_identifier(distribution)
 
         not_enough_bytes = True
 
         while not_enough_bytes:
-        
+
             # We download only the first megabyte of data
-            csv_content = urllib.request.urlopen(access_url).read(first_n_bytes)
-            
-            # Try different encodings
-            content = None
-            for encoding in ['utf-8', 'utf-8-sig', 'iso-8859-1']:
-                try:
-                    content = csv_content.decode(encoding)
-                    break
-                except UnicodeDecodeError:
-                    continue
-            
-            if not content:
-                content = csv_content.decode('utf-8', errors='replace')
+            raw_content = urllib.request.urlopen(access_url).read(first_n_bytes)
+
+            content = self.decode_content(raw_content)
 
             not_enough_bytes = "\n" not in content
             if not_enough_bytes:
                 first_n_bytes *= 2
-                print(f"DEBUG CSVImporter: not enough bytes downloaded, \\n not detected, first_n_bytes increased to {first_n_bytes}")
-        
+                print(
+                    f"DEBUG CSVImporter: not enough bytes downloaded, \\n not detected, first_n_bytes increased to {first_n_bytes}"
+                )
+
         return self.parse_csv_content(content, identifier)
-    
+
     def parse_csv_content(self, csv_content: str, identifier: str) -> Dict:
         """Parse CSV content and extract structure"""
         # Try different delimiters
-        delimiters = [',', ';', '\t']
-        best_delimiter = ','
+        delimiters = [",", ";", "\t"]
+        best_delimiter = ","
         max_columns = 0
-        
+
         for delimiter in delimiters:
             try:
                 sample_reader = csv.reader(io.StringIO(csv_content[:1000]), delimiter=delimiter)
@@ -265,57 +265,53 @@ class CSVImporter(FormatImporter):
                     best_delimiter = delimiter
             except:
                 continue
-        
+
         # Parse with best delimiter
         reader = csv.reader(io.StringIO(csv_content), delimiter=best_delimiter)
-        
+
         try:
             headers = next(reader)
             rows = list(reader)
         except StopIteration:
             raise Exception("Empty CSV file")
-        
+
         # Create structure
         data = {
             "identifier": identifier,
             "title": {"en": f"CSV Structure for {identifier}"},
             "description": {"en": f"Automatically generated structure for CSV file with {len(headers)} columns"},
-            "properties": []
+            "properties": [],
         }
-        
+
         # Analyze each column
         for i, header in enumerate(headers):
-            column_values = [row[i] if i < len(row) else '' for row in rows[:50]]
+            column_values = [row[i] if i < len(row) else "" for row in rows[:50]]
             prop_name = self.clean_property_name(header)
             datatype = self.infer_datatype(column_values)
-            
-            data["properties"].append({
-                "name": prop_name,
-                "labels": {"en": header},
-                "datatype": datatype
-            })
-        
+
+            data["properties"].append({"name": prop_name, "labels": {"en": header}, "datatype": datatype})
+
         return data
-    
+
     def clean_property_name(self, name: str) -> str:
         """Convert to camelCase property name"""
-        name = re.sub(r'[^\w\s]', '', str(name))
+        name = re.sub(r"[^\w\s]", "", str(name))
         words = name.split()
         if not words:
-            return 'column'
-        
+            return "column"
+
         result = words[0].lower()
         for word in words[1:]:
             result += word.capitalize()
-        
-        return result or 'column'
-    
+
+        return result or "column"
+
     def infer_datatype(self, values: List[str]) -> str:
         """Infer datatype from values"""
         non_empty = [v.strip() for v in values if v.strip()]
         if not non_empty:
             return "string"
-        
+
         # Try integer
         try:
             for v in non_empty:
@@ -323,7 +319,7 @@ class CSVImporter(FormatImporter):
             return "integer"
         except ValueError:
             pass
-        
+
         # Try decimal
         try:
             for v in non_empty:
@@ -331,7 +327,7 @@ class CSVImporter(FormatImporter):
             return "decimal"
         except ValueError:
             pass
-        
+
         return "string"
 
 
@@ -343,6 +339,7 @@ IMPORTERS = {
     # "json": JSONImporter,
     # "xml": XMLImporter,
 }
+
 
 def get_suitable_importer(distribution: Dict):
     """Find the right importer for a distribution"""

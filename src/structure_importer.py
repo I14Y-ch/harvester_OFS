@@ -81,20 +81,22 @@ class StructureImporter(CommonI14YAPI):
 
         if not import_all:
             # Create datasets to process from the harvest log
-            dataset_ids_path_harvesting = "OGD_OFS/data/dataset_ids.json"
+            datasets_path_harvesting = "OGD_OFS/data/datasets.json"
             harvest_log_path = "harvest_log.txt"
 
             try:
-                with open(dataset_ids_path_harvesting, "r") as f:
-                    dataset_ids = json.load(f)
+                with open(datasets_path_harvesting, "r") as f:
+                    datasets = json.load(f)
             except FileNotFoundError:
-                print(f"ERROR: {dataset_ids_path_harvesting} not found")
+                print(f"ERROR: {datasets_path_harvesting} not found")
                 return
 
-            datasets_to_process_ids = StructureImporter.create_datasets_to_process(harvest_log_path, dataset_ids_path_harvesting)
+            datasets_to_process = StructureImporter.create_datasets_to_process(
+                harvest_log_path, datasets_path_harvesting
+            )
 
             # Build the datasets_to_process dictionary
-            
+
             for ds_id in datasets_to_process_ids:
                 if ds_id in dataset_ids:
                     datasets_to_process[ds_id] = dataset_ids[ds_id]
@@ -104,13 +106,15 @@ class StructureImporter(CommonI14YAPI):
         importer = StructureImporter(api_params)
         importer.run_import(datasets_to_process, import_all=import_all)
 
-    # api_params:
-    # - client_key: client key to generate token
-    # - client_secret: client secret to generate token
-    # - api_get_token_url: url to generate token
-    # - api_base_url: url for i14y api calls
-    # - organization: i14y organization
-    def __init__(self, api_params):
+    def __init__(self, api_params: Dict[str, str]):
+        """
+        api_params must be a dict containing:
+        - client_key: client key to generate token
+        - client_secret: client secret to generate token
+        - api_get_token_url: url to generate token
+        - api_base_url: url for i14y api calls
+        - organization: i14y organization
+        """
         super().__init__(api_params)
         self.id_dataset_map = {}
 
@@ -195,9 +199,7 @@ class StructureImporter(CommonI14YAPI):
         files = {"file": ("structure.ttl", turtle_data, "text/turtle")}
 
         try:
-            print(f"Uploading structure to {url}...")  # Debugging: Print the URL
-            # print(f"Headers: {headers}")
-            # print(f"Files: {files}")
+            print(f"Uploading structure to {url}...")
             response = requests.post(url, headers=headers, files=files, verify=False, timeout=30)
 
             if response.status_code in {200, 201, 204}:
@@ -232,7 +234,8 @@ class StructureImporter(CommonI14YAPI):
             print(f"Error deleting structure for dataset {dataset_id}: {str(e)}")
             return False
 
-    def build_id_dataset_map(self):
+    def build_id_dataset_map(self) -> Dict:
+        """Builds a id->dataset map with fetched datasets for current organization"""
         id_dataset_map = {}
         all_existing_datasets = self.get_all_existing_datasets(self.organization)
         for dataset in all_existing_datasets:
@@ -240,6 +243,7 @@ class StructureImporter(CommonI14YAPI):
         return id_dataset_map
 
     def get_dataset_from_api(self, dataset_id: str) -> Dict:
+        """Before, this function called the API to get dataset information, now it gets it from a prefetched id->dataset dict of datasets"""
         return self.id_dataset_map[dataset_id]
 
     def find_processable_distributions(self, distributions: List[Dict]) -> List[tuple]:
@@ -293,29 +297,29 @@ class StructureImporter(CommonI14YAPI):
 
         # Process first suitable distribution
         dist, importer, format_name, file_id = processable[0]
+
+        if format_name == "csv" and len(processable) > 1:
+            print(f"  More than 1 csv file detected, skipping file_id: {file_id}")
+            return False
+
         print(f"  Processing {format_name} file: {file_id}")
 
-        try:
-            # Always delete existing structure for updated datasets, optional for new ones
-            # For new datasets, try to delete in case there's an old structure
-            print(f"  Deleting existing structure (dataset was updated)")
-            self.delete_structure(dataset_id)
+        # Always delete existing structure for updated datasets, optional for new ones
+        # For new datasets, try to delete in case there's an old structure
+        print(f"  Deleting existing structure (dataset was updated)")
+        self.delete_structure(dataset_id)
 
-            # Download and parse file
-            metadata = importer.download_and_parse(dist)
+        # Download and parse file
+        metadata = importer.download_and_parse(dist)
 
-            # Create and upload SHACL
-            turtle_data = self.create_shacl_graph(metadata)
-            success = self.upload_structure(dataset_id, turtle_data)
+        # Create and upload SHACL
+        turtle_data = self.create_shacl_graph(metadata)
+        success = self.upload_structure(dataset_id, turtle_data)
 
-            if success:
-                print(f"  Structure created successfully")
-                return True
-            else:
-                return False
-
-        except Exception as e:
-            print(f"  Error processing {file_id}: {str(e)}")
+        if success:
+            print(f"  Structure created successfully")
+            return True
+        else:
             return False
 
     def run_import(self, datasets_to_process: Dict[str, Dict], import_all: bool = False):
@@ -329,10 +333,10 @@ class StructureImporter(CommonI14YAPI):
                                 if False we import structures only for datasets updated or created by the harvester
         """
         # Statistics
-        processed = 0
-        created_structures = 0
-        skipped = 0
-        errors = 0
+        processed_structure_datasets = []
+        created_structure_datasets = []
+        skipped_structure_datasets = []
+        error_structure_datasets = []
 
         print("Starting extensible structure import...")
         self.id_dataset_map = self.build_id_dataset_map()
@@ -348,18 +352,25 @@ class StructureImporter(CommonI14YAPI):
             if not dataset_id:
                 continue
 
-            processed += 1
+            processed_structure_datasets.append(f"{identifier} / {dataset_id}")
 
             try:
                 print(f"Processing dataset: {identifier}")
 
                 if self.process_dataset(dataset_id, identifier):
-                    created_structures += 1
+                    created_structure_datasets.append(f"{identifier} / {dataset_id}")
+                else:
+                    skipped_structure_datasets.append(f"{identifier} / {dataset_id}")
 
             except Exception as e:
                 print(f"  Error: {str(e)}")
                 print(traceback.format_exc())
-                errors += 1
+                error_structure_datasets.append(f"{identifier} / {dataset_id}")
+
+        processed = len(processed_structure_datasets)
+        created_structures = len(created_structure_datasets)
+        skipped = len(skipped_structure_datasets)
+        errors = len(error_structure_datasets)
 
         # Print summary
         print(f"\n=== Summary ===")
@@ -371,10 +382,18 @@ class StructureImporter(CommonI14YAPI):
         # Save log
         log_content = f"Structure import completed at {datetime.now()}\n"
         log_content += f"Results:\n"
-        log_content += f"- Datasets processed: {processed}\n"
-        log_content += f"- Structures created: {created_structures}\n"
-        log_content += f"- Skipped: {skipped}\n"
-        log_content += f"- Errors: {errors}\n"
+        log_content += f"Datasets processed: {processed}\n"
+        for x in processed_structure_datasets:
+            log_content += f"\n- {x}"
+        log_content += f"Structures created: {created_structures}\n"
+        for x in created_structure_datasets:
+            log_content += f"\n- {x}"
+        log_content += f"Skipped: {skipped}\n"
+        for x in skipped_structure_datasets:
+            log_content += f"\n- {x}"
+        log_content += f"Errors: {errors}\n"
+        for x in error_structure_datasets:
+            log_content += f"\n- {x}"
 
         with open("structure_import_log.txt", "w") as f:
             f.write(log_content)
@@ -382,7 +401,7 @@ class StructureImporter(CommonI14YAPI):
         print("Log saved to structure_import_log.txt")
 
 
-if __name__=="__main__":
+if __name__ == "__main__":
     api_params = {
         "client_key": os.environ["CLIENT_KEY"],
         "client_secret": os.environ["CLIENT_SECRET"],
@@ -390,7 +409,7 @@ if __name__=="__main__":
         "api_base_url": os.environ["API_BASE_URL"],
         "organization_id": ORGANIZATION_ID,
     }
-    
+
     import_all = os.environ.get("IMPORT_ALL", "False") == "True"
 
     StructureImporter.execute(api_params, import_all=import_all)

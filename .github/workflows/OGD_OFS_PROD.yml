@@ -45,12 +45,13 @@ jobs:
       with:
         name: harvest-log
         path: harvest_log.txt
-
-    - name: Upload structure log
-      uses: actions/upload-artifact@v4
-      with:
-        name: structure_import_log
-        path: structure_import_log.txt
+        
+    # TODO: decomment once we import structures in prod
+    # - name: Upload structure log
+    #   uses: actions/upload-artifact@v4
+    #   with:
+    #     name: structure_import_log
+    #     path: structure_import_log.txt
 
     - name: Upload updated data
       uses: actions/upload-artifact@v4
