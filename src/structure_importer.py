@@ -22,88 +22,16 @@ class StructureImporter(CommonI14YAPI):
     """Main structure importer that works with any format"""
 
     @staticmethod
-    def create_datasets_to_process(harvest_log_path: str, dataset_ids_path: str) -> List[str]:
-        """
-        Create a list of dataset IDs to process based on the harvest log and dataset IDs.
-
-        Args:
-            harvest_log_path (str): Path to the harvest log file.
-            dataset_ids_path (str): Path to the dataset IDs JSON file.
-
-        Returns:
-            List[str]: A list of dataset IDs to process.
-        """
-        # Load dataset IDs
-        try:
-            with open(dataset_ids_path, "r") as f:
-                dataset_ids = json.load(f)
-        except FileNotFoundError:
-            print(f"ERROR: {dataset_ids_path} not found")
-            return []
-
-        # Parse harvest log to understand dataset status
-        datasets_to_process = []
-        try:
-            with open(harvest_log_path, "r") as f:
-                content = f.read()
-
-            current_section = None
-            for line in content.split("\n"):
-                line = line.strip()
-
-                if "Created datasets:" in line:
-                    current_section = "created"
-                elif "Updated datasets:" in line:
-                    current_section = "updated"
-                elif "Unchanged datasets:" in line:
-                    current_section = "unchanged"
-                elif "Deleted datasets:" in line:
-                    current_section = "deleted"
-                elif "Datasets with exception" in line:
-                    current_section = "exception"
-                # We import structures only on updated and created datasets
-                elif line.startswith("- ") and current_section in {"created", "updated"}:
-                    dataset_id = line[2:].strip()  # Remove "- " prefix
-                    datasets_to_process.append(dataset_id)
-
-        except FileNotFoundError:
-            print("No harvest log found - processing all datasets as new")
-            datasets_to_process = list(dataset_ids.keys())
-
-        return datasets_to_process
-
-    @staticmethod
     def execute(api_params: Dict, import_all: bool = False):
         """Main execution"""
         # If import_all=True we import structures for all the datasets and not only those updated and created by the harvester (useful for first run)
 
+        importer = StructureImporter(api_params)
         datasets_to_process = {}
 
         if not import_all:
-            # Create datasets to process from the harvest log
-            datasets_path_harvesting = "OGD_OFS/data/datasets.json"
-            harvest_log_path = "harvest_log.txt"
+            datasets_to_process = importer.create_datasets_to_process()
 
-            try:
-                with open(datasets_path_harvesting, "r") as f:
-                    datasets = json.load(f)
-            except FileNotFoundError:
-                print(f"ERROR: {datasets_path_harvesting} not found")
-                return
-
-            datasets_to_process = StructureImporter.create_datasets_to_process(
-                harvest_log_path, datasets_path_harvesting
-            )
-
-            # Build the datasets_to_process dictionary
-
-            for ds_id in datasets_to_process_ids:
-                if ds_id in dataset_ids:
-                    datasets_to_process[ds_id] = dataset_ids[ds_id]
-
-        # print(f"Datasets to process: {len(datasets_to_process)}")
-
-        importer = StructureImporter(api_params)
         importer.run_import(datasets_to_process, import_all=import_all)
 
     def __init__(self, api_params: Dict[str, str]):
@@ -116,7 +44,27 @@ class StructureImporter(CommonI14YAPI):
         - organization: i14y organization
         """
         super().__init__(api_params)
-        self.id_dataset_map = {}
+        self.identifier_dataset_map = {}
+
+    def create_datasets_to_process(self) -> Dict[str, str]:
+        """
+        Create a dict to process based on datasets.json file.
+
+        Returns:
+            Dict[str,str]: Bfs identifier -> i14y id map
+        """
+        dataset_status_identifier_id_map = self.load_data(self.datasets_file_path)
+
+        datasets_to_process = {}
+
+        actions = ["created", "updated"]
+
+        for action in actions:
+            for identifier_id_map in dataset_status_identifier_id_map[action]:
+                for bfs_identifier, i14y_id in identifier_id_map.items():
+                    datasets_to_process[bfs_identifier] = i14y_id
+
+        return datasets_to_process
 
     def create_shacl_graph(self, metadata: Dict) -> str:
         """Create SHACL graph from metadata (format-agnostic)"""
@@ -234,17 +182,15 @@ class StructureImporter(CommonI14YAPI):
             print(f"Error deleting structure for dataset {dataset_id}: {str(e)}")
             return False
 
-    def build_id_dataset_map(self) -> Dict:
+    def build_identifier_dataset_map(self) -> Dict:
         """Builds a id->dataset map with fetched datasets for current organization"""
-        id_dataset_map = {}
+        identifier_dataset_map = {}
         all_existing_datasets = self.get_all_existing_datasets(self.organization)
         for dataset in all_existing_datasets:
-            id_dataset_map[dataset["id"]] = dataset
-        return id_dataset_map
-
-    def get_dataset_from_api(self, dataset_id: str) -> Dict:
-        """Before, this function called the API to get dataset information, now it gets it from a prefetched id->dataset dict of datasets"""
-        return self.id_dataset_map[dataset_id]
+            bfs_identifier = dataset["identifiers"][0]
+            if self.bfs_identifier_pattern.match(bfs_identifier):
+                identifier_dataset_map[bfs_identifier] = dataset
+        return identifier_dataset_map
 
     def find_processable_distributions(self, distributions: List[Dict]) -> List[tuple]:
         """Find distributions that can be processed and deduplicate"""
@@ -280,7 +226,7 @@ class StructureImporter(CommonI14YAPI):
         print(f"Processing: {identifier}")
 
         # Get dataset from API
-        dataset_data = self.get_dataset_from_api(dataset_id)
+        dataset_data = self.identifier_dataset_map[identifier]
         if not dataset_data:
             return False
 
@@ -322,13 +268,12 @@ class StructureImporter(CommonI14YAPI):
         else:
             return False
 
-    def run_import(self, datasets_to_process: Dict[str, Dict], import_all: bool = False):
+    def run_import(self, datasets_to_process: Dict[str, str], import_all: bool = False):
         """
         Main import process with harvest log awareness.
 
         Args:
-            datasets_to_process (Dict[str, Dict]): A dictionary of datasets to process, where the key is the dataset ID
-                                                   and the value is the dataset metadata.
+            datasets_to_process Dict[str,str]: Bfs identifier -> i14y id map for datasets to process (those created or updated by harvester)
             import_all (bool):  if True we import structures for all the datasets and not only those updated and created by the harvester (useful for first run)
                                 if False we import structures only for datasets updated or created by the harvester
         """
@@ -339,33 +284,38 @@ class StructureImporter(CommonI14YAPI):
         error_structure_datasets = []
 
         print("Starting extensible structure import...")
-        self.id_dataset_map = self.build_id_dataset_map()
+        self.identifier_dataset_map = self.build_identifier_dataset_map()
+
+        dataset_to_process_identifier_data_map = {}
 
         if import_all:
-            datasets_to_process = self.id_dataset_map
+            dataset_to_process_identifier_data_map = self.identifier_dataset_map
+        else:
+            for bfs_identifier, _ in datasets_to_process.items():
+                dataset_to_process_identifier_data_map[bfs_identifier] = self.identifier_dataset_map[bfs_identifier]
 
-        print(f"Datasets to process: {len(datasets_to_process)}")
+        print(f"Datasets to process: {len(dataset_to_process_identifier_data_map)}")
 
         # Process datasets
-        for identifier, data in datasets_to_process.items():
+        for bfs_identifier, data in self.identifier_dataset_map.items():
             dataset_id = data.get("id")
             if not dataset_id:
                 continue
 
-            processed_structure_datasets.append(f"{identifier} / {dataset_id}")
+            processed_structure_datasets.append(f"{bfs_identifier} / {dataset_id}")
 
             try:
-                print(f"Processing dataset: {identifier}")
+                print(f"Processing dataset: {bfs_identifier}")
 
-                if self.process_dataset(dataset_id, identifier):
-                    created_structure_datasets.append(f"{identifier} / {dataset_id}")
+                if self.process_dataset(dataset_id, bfs_identifier):
+                    created_structure_datasets.append(f"{bfs_identifier} / {dataset_id}")
                 else:
-                    skipped_structure_datasets.append(f"{identifier} / {dataset_id}")
+                    skipped_structure_datasets.append(f"{bfs_identifier} / {dataset_id}")
 
             except Exception as e:
                 print(f"  Error: {str(e)}")
                 print(traceback.format_exc())
-                error_structure_datasets.append(f"{identifier} / {dataset_id}")
+                error_structure_datasets.append(f"{bfs_identifier} / {dataset_id}")
 
         processed = len(processed_structure_datasets)
         created_structures = len(created_structure_datasets)

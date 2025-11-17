@@ -1,4 +1,3 @@
-from enum import Enum
 import requests
 from common import CommonI14YAPI, reauth_if_token_expired
 from config import *
@@ -183,15 +182,6 @@ class HarvesterOFS(CommonI14YAPI):
 
         return response.text, action
 
-    def save_data(self, data: Dict[str, Any], file_path: str) -> None:
-        """Saves data to a JSON file."""
-        os.makedirs(os.path.dirname(file_path), exist_ok=True)
-        try:
-            with open(file_path, "w") as file:
-                json.dump(data, file)
-        except IOError as e:
-            print(f"Error saving data to {file_path}: {e}")
-
     def parse_date(self, date_str):
         """Safely parse a date string, returning None if invalid or missing"""
         if not date_str:
@@ -367,8 +357,7 @@ class HarvesterOFS(CommonI14YAPI):
                     log += f"\n- {bfs_identifier}"
 
             # Save log in root directory
-            workspace = os.getcwd()
-            log_path = os.path.join(workspace, "harvest_log.txt")
+            log_path = os.path.join(os.getcwd(), "harvest_log.txt")
             with open(log_path, "w") as f:
                 f.write(log)
 
@@ -379,8 +368,7 @@ class HarvesterOFS(CommonI14YAPI):
 
             print(f"Log saved to: {log_path}")
 
-            path_to_data = os.path.join(workspace, "OGD_OFS", "data", "datasets.json")
-            self.save_data(dataset_status_identifier_id_map, path_to_data)
+            self.save_data(dataset_status_identifier_id_map, self.datasets_file_path)
 
 
 if __name__ == "__main__":

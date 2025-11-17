@@ -1,6 +1,9 @@
+import json
+import os
 from time import time
-from typing import Dict
+from typing import Any, Dict
 import requests
+import re
 
 
 def reauth_if_token_expired(func):
@@ -52,6 +55,8 @@ class CommonI14YAPI:
             self.client_key = api_params["client_key"]
             self.client_secret = api_params["client_secret"]
             self.api_token = self.get_access_token()
+            self.bfs_identifier_pattern = re.compile(r"^\d+(-[a-z]+)?@bundesamt-fur-statistik-bfs$")
+            self.datasets_file_path = os.path.join(os.getcwd(), "OGD_OFS", "data", "datasets.json")
         except (KeyError, TypeError):
             exception_str = "You need to provide the following parameters in a dict:"
             exception_str += "\n- client_key: client key to generate token"
@@ -93,14 +98,40 @@ class CommonI14YAPI:
                 "pageSize": pageSize,
                 "page": i,
             }
-            # try:
             response = requests.get(url, params=params, headers=headers, verify=False)
             response.raise_for_status()
             data = response.json()
             for dataset in data["data"]:
-                all_datasets.append(dataset)
+                identifier = dataset["identifiers"][0]
+                if self.bfs_identifier_pattern.match(identifier):
+                    all_datasets.append(dataset)
 
             i += 1
             has_more = len(data["data"]) > 0
 
         return all_datasets
+
+    def save_data(self, data: Dict[str, Any], file_path: str) -> None:
+        """Saves data to a JSON file."""
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+        try:
+            with open(file_path, "w") as file:
+                json.dump(data, file)
+        except IOError as e:
+            print(f"Error saving data to {file_path}: {e}")
+
+    def load_data(self, file_path: str) -> Dict[str, Any]:
+        """Loads data from a JSON file."""
+        if not os.path.exists(file_path):
+            print(f"Warning: {file_path} does not exist.")
+            return {}
+
+        try:
+            with open(file_path, "r") as file:
+                return json.load(file)
+        except json.JSONDecodeError as e:
+            print(f"Error decoding JSON from {file_path}: {e}")
+            return {}
+        except IOError as e:
+            print(f"Error loading data from {file_path}: {e}")
+            return {}
