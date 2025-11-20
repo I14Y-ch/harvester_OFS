@@ -199,9 +199,8 @@ class HarvesterOFS(CommonI14YAPI):
         yesterday = now_utc_plus_1 - datetime.timedelta(days=1)
 
         """
-        This dict has as key the status of the dataset (created/updated/unchanged/deleted/exception)
+        This dict has as key the status of the dataset (created/updated/unchanged/deleted)
             created/updated/unchanged/deleted contains a dict with the bfs identifier as key and i14y id as value
-            exception contains a list of bfs identifiers because they weren't uploaded to i14y
         dataset_status_identifier_id_map : {
             "created" : {
                 "bfs_identifier": i14y_id
@@ -214,161 +213,120 @@ class HarvesterOFS(CommonI14YAPI):
             },
             "deleted" : {
                 "bfs_identifier": i14y_id
-            },
-            "exception" : [
-                "bfs_identifier"
-            ]
+            }
         }
         """
         dataset_status_identifier_id_map = {
             "created": {},
             "updated": {},
             "unchanged": {},
-            "deleted": {},
-            "exception": [],
+            "deleted": {}
         }
-        encountered_exception = False
 
-        try:
+        print("Fetching datasets from API...")
 
-            print("Fetching datasets from API...")
+        datasets_bfs = self.fetch_datasets_from_api()
 
-            datasets_bfs = self.fetch_datasets_from_api()
+        print("\nStarting dataset import...\n")
 
-            print("\nStarting dataset import...\n")
+        current_source_identifiers = {dataset["identifiers"][0] for dataset in datasets_bfs}
+        all_existing_datasets = self.get_all_existing_datasets(self.organization)
 
-            current_source_identifiers = {dataset["identifiers"][0] for dataset in datasets_bfs}
-            all_existing_datasets = self.get_all_existing_datasets(self.organization)
+        all_existing_datasets_identifier_id_map = self.get_all_identifier_id_map(all_existing_datasets)
 
-            all_existing_datasets_identifier_id_map = self.get_all_identifier_id_map(all_existing_datasets)
+        for dataset in datasets_bfs:
+            identifier = dataset["identifiers"][0]
+            print(f"\nProcessing dataset: {identifier}")
+            print(f"Issued date: {dataset.get('issued')}")
+            print(f"Modified date: {dataset.get('modified')}")
 
-            for dataset in datasets_bfs:
-                identifier = dataset["identifiers"][0]
-                print(f"\nProcessing dataset: {identifier}")
-                print(f"Issued date: {dataset.get('issued')}")
-                print(f"Modified date: {dataset.get('modified')}")
+            modified_date = self.parse_date(dataset.get("modified"))
+            created_date = self.parse_date(dataset.get("issued", dataset.get("modified")))
 
-                modified_date = self.parse_date(dataset.get("modified"))
-                created_date = self.parse_date(dataset.get("issued", dataset.get("modified")))
+            try:
+                is_new_dataset = identifier not in all_existing_datasets_identifier_id_map.keys()
+                is_updated_dataset = modified_date and modified_date > yesterday
 
-                try:
-                    is_new_dataset = identifier not in all_existing_datasets_identifier_id_map.keys()
-                    is_updated_dataset = modified_date and modified_date > yesterday
-
-                    existing_dataset_id = (
-                        all_existing_datasets_identifier_id_map[identifier]
-                        if identifier in all_existing_datasets_identifier_id_map.keys()
-                        else None
-                    )
-
-                    if existing_dataset_id and not is_updated_dataset:
-                        dataset_status_identifier_id_map["unchanged"][identifier] = existing_dataset_id
-                        print(f"No changes detected for dataset: {identifier} (already exists)\n")
-
-                    elif is_new_dataset or is_updated_dataset:
-                        action = "created" if is_new_dataset else "updated"
-                        print(f"{action.capitalize()} dataset detected: {identifier}")
-
-                        payload = self.create_dataset_payload(dataset)
-                        response_id, action = self.submit_to_api(
-                            payload, identifier, all_existing_datasets_identifier_id_map
-                        )
-                        response_id = response_id.strip('"')
-
-                        if action == "created":
-                            dataset_status_identifier_id_map["created"][identifier] = response_id
-                            self.change_level_i14y(response_id, "Public")
-                            self.change_status_i14y(response_id, "Recorded")
-
-                        elif action == "updated":
-                            dataset_status_identifier_id_map["updated"][identifier] = response_id
-
-                        print(f"Success - Dataset {action}: {response_id}\n")
-
-                except Exception as e:
-                    print(f"Error processing dataset {identifier}: {str(e)}\n")
-                    print(traceback.format_exc())
-
-            # Find datasets that exist in previous_ids but not in current source
-            datasets_to_delete = set(all_existing_datasets_identifier_id_map.keys()) - current_source_identifiers
-
-            for identifier in datasets_to_delete:
-                try:
-                    dataset_id = all_existing_datasets_identifier_id_map[identifier]
-
-                    try:
-                        self.change_level_i14y(dataset_id, "Internal")
-                        print(f"Changed publication level to Internal for {identifier}")
-                    except requests.HTTPError as e:
-                        print(f"Error changing publication level for {identifier}: {e.response.text}")
-                        # TODO: if Status 405 means that the resource has already Internal publication level, it would be better to check status and not error message
-                        if "The resource already has its publication level set to" not in str(e.response.text):
-                            continue  # Skip deletion if we can't change the level
-
-                    response = self.delete_i14y(dataset_id)
-
-                    if response and response.status_code in {200, 204}:
-                        dataset_status_identifier_id_map["deleted"][identifier] = dataset_id
-                        print(f"Successfully deleted dataset: {identifier}")
-                    else:
-                        print(f"Failed to delete dataset {identifier}: {response.status_code} - {response.text}")
-                except Exception as e:
-                    print(f"Error deleting dataset {identifier}: {str(e)}")
-
-        except Exception as e:
-            encountered_exception = True
-            print("Previously unhandled exception")
-            print(traceback.format_exc())
-
-        finally:
-            # If the amount of harvested datasets > the amount of processed datasets it means that there was an exception
-            # (we explicitly mark datasets as created, updated, deleted or unchanged, so if a dataset is not marked there was an error)
-            encountered_exception |= len(current_source_identifiers) > sum(
-                [
-                    len(dataset_status_identifier_id_map[action])
-                    for action in ["created", "updated", "unchanged", "deleted"]
-                ]
-            )
-
-            # The dataset identifiers that had an exception are those that were in datasets_bfs
-            # but not in dataset_status_identifier_id_map['created'/'updated'/'unchanged'/'deleted']
-            dataset_status_identifier_id_map["exception"] = list(
-                current_source_identifiers
-                - set().union(
-                    *[
-                        dataset_status_identifier_id_map[action].keys()
-                        for action in ["created", "updated", "unchanged", "deleted"]
-                    ]
+                existing_dataset_id = (
+                    all_existing_datasets_identifier_id_map[identifier]
+                    if identifier in all_existing_datasets_identifier_id_map.keys()
+                    else None
                 )
-            )
 
-            # Create log
-            log = f"Harvest completed successfully at {datetime.datetime.now()}\n"
-            if encountered_exception:
-                log = f"Harvest encountered exception at {datetime.datetime.now()}\n"
-            for action in ["created", "updated", "unchanged", "deleted"]:
-                log += f"{action.capitalize()} datasets ([bfs identifier] : [i14y id]):\n"
-                for bfs_identifier, i14y_id in dataset_status_identifier_id_map[action].items():
-                    log += f"\n- {bfs_identifier} : {i14y_id}"
+                if existing_dataset_id and not is_updated_dataset:
+                    dataset_status_identifier_id_map["unchanged"][identifier] = existing_dataset_id
+                    print(f"No changes detected for dataset: {identifier} (already exists)\n")
 
-            if encountered_exception:
-                log += "\nDatasets with exception ([bfs identifier]):\n"
-                for bfs_identifier in dataset_status_identifier_id_map["exception"]:
-                    log += f"\n- {bfs_identifier}"
+                elif is_new_dataset or is_updated_dataset:
+                    action = "created" if is_new_dataset else "updated"
+                    print(f"{action.capitalize()} dataset detected: {identifier}")
 
-            # Save log in root directory
-            log_path = os.path.join(os.getcwd(), "harvest_log.txt")
-            with open(log_path, "w") as f:
-                f.write(log)
+                    payload = self.create_dataset_payload(dataset)
+                    response_id, action = self.submit_to_api(
+                        payload, identifier, all_existing_datasets_identifier_id_map
+                    )
+                    response_id = response_id.strip('"')
 
-            print("\n=== Import Summary ===")
-            print(f"Total processed: {len(datasets_bfs)}")
-            for action in ["created", "updated", "unchanged", "deleted", "exception"]:
-                print(f"Total {action.capitalize()}: {len(dataset_status_identifier_id_map[action])}")
+                    if action == "created":
+                        dataset_status_identifier_id_map["created"][identifier] = response_id
+                        self.change_level_i14y(response_id, "Public")
+                        self.change_status_i14y(response_id, "Recorded")
 
-            print(f"Log saved to: {log_path}")
+                    elif action == "updated":
+                        dataset_status_identifier_id_map["updated"][identifier] = response_id
 
-            self.save_data(dataset_status_identifier_id_map, self.datasets_file_path)
+                    print(f"Success - Dataset {action}: {response_id}\n")
+
+            except Exception as e:
+                print(f"Error processing dataset {identifier}: {str(e)}\n")
+                print(traceback.format_exc())
+
+        # Find datasets that exist in previous_ids but not in current source
+        datasets_to_delete = set(all_existing_datasets_identifier_id_map.keys()) - current_source_identifiers
+
+        for identifier in datasets_to_delete:
+            try:
+                dataset_id = all_existing_datasets_identifier_id_map[identifier]
+
+                try:
+                    self.change_level_i14y(dataset_id, "Internal")
+                    print(f"Changed publication level to Internal for {identifier}")
+                except requests.HTTPError as e:
+                    print(f"Error changing publication level for {identifier}: {e.response.text}")
+                    # TODO: if Status 405 means that the resource has already Internal publication level, it would be better to check status and not error message
+                    if "The resource already has its publication level set to" not in str(e.response.text):
+                        continue  # Skip deletion if we can't change the level
+
+                response = self.delete_i14y(dataset_id)
+
+                if response and response.status_code in {200, 204}:
+                    dataset_status_identifier_id_map["deleted"][identifier] = dataset_id
+                    print(f"Successfully deleted dataset: {identifier}")
+                else:
+                    print(f"Failed to delete dataset {identifier}: {response.status_code} - {response.text}")
+            except Exception as e:
+                print(f"Error deleting dataset {identifier}: {str(e)}")
+
+
+        log = f"Harvest completed successfully at {datetime.datetime.now()}\n"
+        for action in ["created", "updated", "unchanged", "deleted"]:
+            log += f"\n{action.capitalize()} datasets: {len(dataset_status_identifier_id_map[action])}"
+            for bfs_identifier, i14y_id in dataset_status_identifier_id_map[action].items():
+                log += f"\n- {bfs_identifier} : {i14y_id}"
+
+        # Save log in root directory
+        log_path = os.path.join(os.getcwd(), "harvest_log.txt")
+        with open(log_path, "w") as f:
+            f.write(log)
+
+        print("\n=== Import Summary ===")
+        print(f"Total processed: {len(datasets_bfs)}")
+        for action in ["created", "updated", "unchanged", "deleted"]:
+            print(f"Total {action.capitalize()}: {len(dataset_status_identifier_id_map[action])}")
+
+        print(f"Log saved to: {log_path}")
+
+        self.save_data(dataset_status_identifier_id_map, self.datasets_file_path)
 
 
 if __name__ == "__main__":

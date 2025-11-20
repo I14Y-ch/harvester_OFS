@@ -60,9 +60,8 @@ class StructureImporter(CommonI14YAPI):
         actions = ["created", "updated"]
 
         for action in actions:
-            for identifier_id_map in dataset_status_identifier_id_map[action]:
-                for bfs_identifier, i14y_id in identifier_id_map.items():
-                    datasets_to_process[bfs_identifier] = i14y_id
+            for bfs_identifier, i14y_id in dataset_status_identifier_id_map[action].items():
+                datasets_to_process[bfs_identifier] = i14y_id
 
         return datasets_to_process
 
@@ -151,13 +150,13 @@ class StructureImporter(CommonI14YAPI):
             response = requests.post(url, headers=headers, files=files, verify=False, timeout=30)
 
             if response.status_code in {200, 201, 204}:
-                print(f"    Structure uploaded: {response.text.strip()}")
+                print(f"\tStructure uploaded: {response.text.strip()}")
                 return True
             else:
-                print(f"    Upload failed: {response.status_code} - {response.text}")
+                print(f"\tUpload failed: {response.status_code} - {response.text}")
                 return False
         except Exception as e:
-            print(f"    Upload error: {str(e)}")
+            print(f"\tUpload error: {str(e)}")
             return False
 
     @reauth_if_token_expired
@@ -216,9 +215,9 @@ class StructureImporter(CommonI14YAPI):
                         processable.append((dist, importer, format_name, identifier))
                         seen_identifiers.add(identifier_lower)
                     else:
-                        print(f"    Skipping duplicate {format_name} file: {identifier}")
+                        print(f"\tSkipping duplicate {format_name} file: {identifier}")
                 else:
-                    print(f"    Invalid identifier (not a string): {identifier}")
+                    print(f"\tInvalid identifier (not a string): {identifier}")
         return processable
 
     def process_dataset(self, dataset_id: str, identifier: str) -> bool:
@@ -232,27 +231,27 @@ class StructureImporter(CommonI14YAPI):
 
         distributions = dataset_data.get("distributions", [])
         if not distributions:
-            print(f"  No distributions found")
+            print(f"\tNo distributions found")
             return False
 
         # Find processable distributions (with deduplication)
         processable = self.find_processable_distributions(distributions)
         if not processable:
-            print(f"  No supported file formats found")
+            print(f"\tNo supported file formats found")
             return False
 
         # Process first suitable distribution
         dist, importer, format_name, file_id = processable[0]
 
         if format_name == "csv" and len(processable) > 1:
-            print(f"  More than 1 csv file detected, skipping file_id: {file_id}")
+            print(f"\tMore than 1 csv file detected, skipping file_id: {file_id}")
             return False
 
-        print(f"  Processing {format_name} file: {file_id}")
+        print(f"\tProcessing {format_name} file: {file_id}")
 
         # Always delete existing structure for updated datasets, optional for new ones
         # For new datasets, try to delete in case there's an old structure
-        print(f"  Deleting existing structure (dataset was updated)")
+        print(f"\tDeleting existing structure (dataset was updated)")
         self.delete_structure(dataset_id)
 
         # Download and parse file
@@ -263,7 +262,7 @@ class StructureImporter(CommonI14YAPI):
         success = self.upload_structure(dataset_id, turtle_data)
 
         if success:
-            print(f"  Structure created successfully")
+            print(f"\tStructure created successfully")
             return True
         else:
             return False
@@ -278,7 +277,6 @@ class StructureImporter(CommonI14YAPI):
                                 if False we import structures only for datasets updated or created by the harvester
         """
         # Statistics
-        processed_structure_datasets = []
         created_structure_datasets = []
         skipped_structure_datasets = []
         error_structure_datasets = []
@@ -297,51 +295,44 @@ class StructureImporter(CommonI14YAPI):
         print(f"Datasets to process: {len(dataset_to_process_identifier_data_map)}")
 
         # Process datasets
-        for bfs_identifier, data in self.identifier_dataset_map.items():
+        for bfs_identifier, data in dataset_to_process_identifier_data_map.items():
             dataset_id = data.get("id")
             if not dataset_id:
                 continue
-
-            processed_structure_datasets.append(f"{bfs_identifier} / {dataset_id}")
 
             try:
                 print(f"Processing dataset: {bfs_identifier}")
 
                 if self.process_dataset(dataset_id, bfs_identifier):
-                    created_structure_datasets.append(f"{bfs_identifier} / {dataset_id}")
+                    created_structure_datasets.append(f"{bfs_identifier} : {dataset_id}")
                 else:
-                    skipped_structure_datasets.append(f"{bfs_identifier} / {dataset_id}")
+                    skipped_structure_datasets.append(f"{bfs_identifier} : {dataset_id}")
 
             except Exception as e:
-                print(f"  Error: {str(e)}")
+                print(f"\tError: {str(e)}")
                 print(traceback.format_exc())
-                error_structure_datasets.append(f"{bfs_identifier} / {dataset_id}")
+                error_structure_datasets.append(f"{bfs_identifier} : {dataset_id}")
 
-        processed = len(processed_structure_datasets)
         created_structures = len(created_structure_datasets)
         skipped = len(skipped_structure_datasets)
         errors = len(error_structure_datasets)
 
         # Print summary
         print(f"\n=== Summary ===")
-        print(f"Datasets processed: {processed}")
         print(f"Structures created: {created_structures}")
         print(f"Skipped: {skipped}")
         print(f"Errors: {errors}")
 
         # Save log
-        log_content = f"Structure import completed at {datetime.now()}\n"
-        log_content += f"Results:\n"
-        log_content += f"Datasets processed: {processed}\n"
-        for x in processed_structure_datasets:
-            log_content += f"\n- {x}"
-        log_content += f"Structures created: {created_structures}\n"
+        log_content = f"Structure import completed at {datetime.now()}"
+        log_content += f"\nResults:\n"
+        log_content += f"\nStructures created: {created_structures}"
         for x in created_structure_datasets:
             log_content += f"\n- {x}"
-        log_content += f"Skipped: {skipped}\n"
+        log_content += f"\nSkipped: {skipped}"
         for x in skipped_structure_datasets:
             log_content += f"\n- {x}"
-        log_content += f"Errors: {errors}\n"
+        log_content += f"\nErrors: {errors}"
         for x in error_structure_datasets:
             log_content += f"\n- {x}"
 

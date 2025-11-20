@@ -1,5 +1,3 @@
-import os
-
 # OGD OFS API
 API_OFS_URL = "https://dam-api.bfs.admin.ch/hub/api/ogd/harvest"
 
