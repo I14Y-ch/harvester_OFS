@@ -33,7 +33,7 @@ The harvesting of the OGD Statistical Federal Office catalogue is done via Githu
 | __adms:versionNotes__ | optional |
 
 
-prov.qualifiedAttribution and prov.qualifiedRelation are not supported automatically, you can add those informations manually on I14Y. 
+prov.qualifiedAttribution and prov.qualifiedRelation are not supported automatically, you can add those informations manually on I14Y.
 
 - Supported properties for dcat.Distribution:
   
@@ -66,31 +66,37 @@ In detail, the process works as follows:
 - Uses secrets `CLIENT_ID` and `CLIENT_SECRET` stored securely
 
 ### 2. Data Harvesting Process
-- **Loads previous state**: Reads stored dataset IDs from `dataset_ids.json`
-- **Fetches current datasets**: Retrieves OGD from DAM API (`https://dam-api.bfs.admin.ch/hub/api/ogd/harvest`)  
-- **Processes each dataset**:  
+- **Fetches current datasets**: Retrieves OGD from DAM API (`https://dam-api.bfs.admin.ch/hub/api/ogd/harvest`)
+- **Fetches already existing datasets from I14Y**: Gets all datasets for organisation CH1 with identifier xxx@bundesamt-fur-statistik-bfs
+- **Processes each dataset**:
    - Compares with previous version
    - Identifies new, updated, unchanged or deleted datasets
-   - Creates appropriate payload for I14Y API  
+   - Creates appropriate payload for I14Y API
 
 ### 3. Dataset Processing Logic
-- **For new/updated datasets**:  
-   - Checks if the dataset is valid:  
-      - At least one description for the dataset  
-      - PDF distribution is discarded  
+- **For new/updated datasets**:
+   - Checks if the dataset is valid:
+      - At least one description for the dataset
+      - PDF distribution is discarded
       - At least one distribution per dataset
-   - Creates proper API payload  
-   - Submits to I14Y API (`api-a.i14y.admin.ch` for ABN, `api-a.i14y.admin.ch` for PROD)  
-   - For new datasets, automatically sets:  
+   - Creates proper API payload
+   - Submits to I14Y API (`api-a.i14y.admin.ch` for ABN, `api-a.i14y.admin.ch` for PROD)
+   - For new datasets, automatically sets:
       - Status: "Recorded"
-      - Level: "Public"  
+      - Level: "Public"
 
-### 4. Output and Logging
+### 4. Structures Import
+- Once the datasets are imported, we also import the Structures for the datasets that were created or updated by the Harvester
+- `datasets.json` is used by StructureImporter to know which datasets were created or updated by the harvester
+- For now in the workflows, we import the structures only for ABN, not prod
+
+### 5. Output and Logging
 *(Logs retention: 2 days, configurable)*  
 
 - **Artifacts**:  
-   - `dataset_ids.json`: Current state of all processed datasets  
-   - `harvest_log.txt`: Detailed operation log  
+   - `datasets.json`: State of processed datasets by harvester  
+   - `harvest_log.txt`: Detailed operation log  for import of datasets
+   - `structure_import_log.txt`: Detailed operation log for import of structures
 
 - **Log includes**:  
    - Timestamp of operation  
