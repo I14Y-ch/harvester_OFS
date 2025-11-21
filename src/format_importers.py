@@ -2,6 +2,7 @@
 Format-specific importers - simple classes for different file formats
 """
 
+import datetime
 import re
 import os
 import csv
@@ -14,6 +15,18 @@ import urllib
 
 class FormatImporter:
     """Common functions for all importers"""
+
+    YEAR_KEYWORDS = {"jahr", "year", "année", "annee", "anno"}
+    DATE_FORMATS = [
+        "%Y-%m-%d",
+        "%d/%m/%Y",
+        "%m/%d/%Y",
+        "%Y/%m/%d",
+        "%d.%m.%Y",
+        "%d.%m.%y",
+    ]
+    BOOLEAN_TRUE = {"1", "oui", "ja", "si"}
+    BOOLEAN_FALSE = {"0", "non", "nein", "no"}
 
     def get_access_url(self, distribution: Dict) -> Optional[str]:
         """Get access URL from distribution"""
@@ -87,7 +100,12 @@ class PXImporter(FormatImporter):
 
             px_content = self.decode_content(raw_content)
 
+            px_content = px_content.replace("\r\n", "\n").replace("\r", "\n")
+
+            match = re.search(r"DATA\s*=\s*(.*)", px_content, re.DOTALL)
+            # We check if DATA= is present
             not_enough_bytes = "DATA=" not in px_content
+
             if not_enough_bytes:
                 first_n_bytes *= 2
                 print(
@@ -101,7 +119,7 @@ class PXImporter(FormatImporter):
         """Parse PX file content"""
         data = {"identifier": px_id, "title": {}, "description": {}, "properties": []}
 
-        lines = px_content.replace("\r\n", "\n").replace("\r", "\n")
+        lines = px_content
 
         # Extract TITLE
         for match in re.finditer(r'TITLE(?:\[(\w+)\])?="(.*?)";', lines, re.DOTALL):
@@ -149,7 +167,9 @@ class PXImporter(FormatImporter):
             first_name = next(iter(heading_dimension.values()))
             prop_name = self.clean_property_name(first_name)
             # Check if it's a year
-            is_year = any("jahr" in name.lower() or "year" in name.lower() for name in heading_dimension.values())
+            is_year = any(
+                any(keyword in name.lower() for keyword in self.YEAR_KEYWORDS) for name in heading_dimension.values()
+            )
             data["properties"].append(
                 {"name": prop_name, "labels": heading_dimension, "datatype": "gYear" if is_year else "string"}
             )
@@ -240,7 +260,9 @@ class CSVImporter(FormatImporter):
 
             content = self.decode_content(raw_content)
 
-            not_enough_bytes = "\n" not in content
+            content = content.replace("\r\n", "\n").replace("\r", "\n")
+
+            not_enough_bytes = len([line for line in content.split("\n") if line.strip() != ""]) < 2
             if not_enough_bytes:
                 first_n_bytes *= 2
                 print(
@@ -258,7 +280,7 @@ class CSVImporter(FormatImporter):
 
         for delimiter in delimiters:
             try:
-                sample_reader = csv.reader(io.StringIO(csv_content[:1000]), delimiter=delimiter)
+                sample_reader = csv.reader(io.StringIO(csv_content), delimiter=delimiter)
                 first_row = next(sample_reader, [])
                 if len(first_row) > max_columns:
                     max_columns = len(first_row)
@@ -287,7 +309,8 @@ class CSVImporter(FormatImporter):
         for i, header in enumerate(headers):
             column_values = [row[i] if i < len(row) else "" for row in rows[:50]]
             prop_name = self.clean_property_name(header)
-            datatype = self.infer_datatype(column_values)
+            is_year = any(keyword in prop_name.lower() for keyword in self.YEAR_KEYWORDS)
+            datatype = "gYear" if is_year else self.infer_datatype(column_values)
 
             data["properties"].append({"name": prop_name, "labels": {"en": header}, "datatype": datatype})
 
@@ -306,27 +329,34 @@ class CSVImporter(FormatImporter):
 
         return result or "column"
 
+    def is_date(self, value: str) -> bool:
+        for fmt in self.DATE_FORMATS:
+            try:
+                datetime.datetime.strptime(value, fmt)
+                return True
+            except ValueError:
+                continue
+        return False
+
     def infer_datatype(self, values: List[str]) -> str:
         """Infer datatype from values"""
-        non_empty = [v.strip() for v in values if v.strip()]
+        non_empty = [v.strip().lower() for v in values if v.strip()]
         if not non_empty:
             return "string"
 
-        # Try integer
-        try:
-            for v in non_empty:
-                int(v)
-            return "integer"
-        except ValueError:
-            pass
+        if all(v in self.BOOLEAN_TRUE or v in self.BOOLEAN_FALSE for v in non_empty):
+            return "boolean"
 
-        # Try decimal
         try:
-            for v in non_empty:
-                float(v)
+            float_values = [float(v.replace(',', '.')) for v in non_empty]
+            if all(f.is_integer() for f in float_values):
+                return "integer"
             return "decimal"
         except ValueError:
             pass
+
+        if all(self.is_date(v) for v in non_empty):
+            return "date"
 
         return "string"
 
