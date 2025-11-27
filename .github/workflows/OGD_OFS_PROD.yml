@@ -12,16 +12,6 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
-
-    - name: Download previous data
-      uses: dawidd6/action-download-artifact@v4
-      continue-on-error: true
-      with:
-          name: dataset_ids
-          workflow: OGD_OFS.yml
-          workflow_conclusion: success
-          if_no_artifact_found: warn
-          path: OGD_OFS/data
         
     - name: Set up Python
       uses: actions/setup-python@v5
