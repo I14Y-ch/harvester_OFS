@@ -300,18 +300,12 @@ class StructureImporter(CommonI14YAPI):
             if not dataset_id:
                 continue
 
-            try:
-                print(f"Processing dataset: {bfs_identifier}")
+            print(f"Processing dataset: {bfs_identifier}")
 
-                if self.process_dataset(dataset_id, bfs_identifier):
-                    created_structure_datasets.append(f"{bfs_identifier} : {dataset_id}")
-                else:
-                    skipped_structure_datasets.append(f"{bfs_identifier} : {dataset_id}")
-
-            except Exception as e:
-                print(f"\tError: {str(e)}")
-                print(traceback.format_exc())
-                error_structure_datasets.append(f"{bfs_identifier} : {dataset_id}")
+            if self.process_dataset(dataset_id, bfs_identifier):
+                created_structure_datasets.append(f"{bfs_identifier} : {dataset_id}")
+            else:
+                skipped_structure_datasets.append(f"{bfs_identifier} : {dataset_id}")
 
         created_structures = len(created_structure_datasets)
         skipped = len(skipped_structure_datasets)
