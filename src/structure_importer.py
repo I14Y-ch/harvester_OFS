@@ -145,19 +145,15 @@ class StructureImporter(CommonI14YAPI):
         # Prepare the file for multipart upload
         files = {"file": ("structure.ttl", turtle_data, "text/turtle")}
 
-        try:
-            print(f"Uploading structure to {url}...")
-            response = requests.post(url, headers=headers, files=files, verify=False, timeout=30)
 
-            if response.status_code in {200, 201, 204}:
-                print(f"\tStructure uploaded: {response.text.strip()}")
-                return True
-            else:
-                print(f"\tUpload failed: {response.status_code} - {response.text}")
-                return False
-        except Exception as e:
-            print(f"\tUpload error: {str(e)}")
-            return False
+        print(f"Uploading structure to {url}...")
+        response = requests.post(url, headers=headers, files=files, verify=False, timeout=30)
+        response.raise_for_status()
+
+        if response.status_code in {200, 201, 204}:
+            print(f"\tStructure uploaded: {response.text.strip()}")
+            return True
+
 
     @reauth_if_token_expired
     def delete_structure(self, dataset_id: str) -> bool:
@@ -166,19 +162,16 @@ class StructureImporter(CommonI14YAPI):
 
         url = f"{self.api_base_url}/datasets/{dataset_id}/structures"
 
-        try:
-            response = requests.delete(url, headers=headers, verify=False, timeout=30)
-            if response.status_code in {200, 204}:
-                print(f"Structure for dataset {dataset_id} deleted successfully.")
-                return True
-            elif response.status_code == 404:
-                print(f"Structure for dataset {dataset_id} not found (already deleted or does not exist).")
-                return True
-            else:
-                print(f"Failed to delete structure for dataset {dataset_id}: {response.status_code} - {response.text}")
-                return False
-        except Exception as e:
-            print(f"Error deleting structure for dataset {dataset_id}: {str(e)}")
+        response = requests.delete(url, headers=headers, verify=False, timeout=30)
+        response.raise_for_status()
+        if response.status_code in {200, 204}:
+            print(f"Structure for dataset {dataset_id} deleted successfully.")
+            return True
+        elif response.status_code == 404:
+            print(f"Structure for dataset {dataset_id} not found (already deleted or does not exist).")
+            return True
+        else:
+            print(f"Failed to delete structure for dataset {dataset_id}: {response.status_code} - {response.text}")
             return False
 
     def build_identifier_dataset_map(self) -> Dict:
