@@ -27,7 +27,7 @@ jobs:
         CLIENT_SECRET: ${{ secrets.CLIENT_SECRET_PROD }}
         GET_TOKEN_URL: "https://identity.bit.admin.ch/realms/bfs-sis-p/protocol/openid-connect/token"
         API_BASE_URL: "https://api.i14y.admin.ch/api/partner/v1"
-        IMPORT_STRUCTURES: "False"
+        IMPORT_STRUCTURES: "True"
       run: python src/harvester.py
     
     - name: Upload log
@@ -36,12 +36,11 @@ jobs:
         name: harvest_log
         path: harvest_log.txt
         
-    # TODO: decomment once we import structures in prod
-    # - name: Upload structure log
-    #   uses: actions/upload-artifact@v4
-    #   with:
-    #     name: structure_import_log
-    #     path: structure_import_log.txt
+    - name: Upload structure log
+      uses: actions/upload-artifact@v4
+      with:
+        name: structure_import_log
+        path: structure_import_log.txt
 
     - name: Upload updated data
       uses: actions/upload-artifact@v4
