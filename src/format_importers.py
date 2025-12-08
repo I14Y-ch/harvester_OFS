@@ -242,6 +242,10 @@ class CSVImporter(FormatImporter):
 
         # Extract the last part of the URL path as the identifier
         identifier = access_url.split("/")[-1].split("?")[0]
+        # The access_url for csvs are often https://dam-api.bfs.admin.ch/hub/api/dam/assets/36158430/master
+        # So we need the part before "master" if the extracted identifier is "master"
+        if identifier and identifier == "master":
+            identifier = access_url.split("/")[-2].split("?")[0]
         return str(identifier) if identifier else None
 
     def download_and_parse(self, distribution: Dict, first_n_bytes: int = 1024**2) -> Dict:
