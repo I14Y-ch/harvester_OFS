@@ -9,3 +9,4 @@ src/local_testing/dataset_ids.json
 src/__pycache__
 harvest_log.txt
 OGD_OFS/data/*
+src/debug*.py

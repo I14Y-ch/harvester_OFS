@@ -161,7 +161,8 @@ class PXImporter(FormatImporter):
             if dim_data:
                 first_name = next(iter(dim_data.values()))
                 prop_name = self.clean_property_name(first_name)
-                data["properties"].append({"name": prop_name, "labels": dim_data, "datatype": "string"})
+                is_year = any(keyword in first_name.lower() for keyword in self.YEAR_KEYWORDS)
+                data["properties"].append({"name": prop_name, "labels": dim_data, "datatype": "gYear" if is_year else "string"})
 
         if heading_dimension:
             first_name = next(iter(heading_dimension.values()))
