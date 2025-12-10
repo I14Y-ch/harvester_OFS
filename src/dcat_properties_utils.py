@@ -19,9 +19,9 @@ dcat3 = Namespace("http://www.w3.org/ns/dcat#")
 
 def extract_dataset(graph, dataset_uri):
     """Extracts dataset details from RDF graph."""
-    
+
     distributions = extract_distributions(graph, dataset_uri)
-    
+
     if not has_valid_distributions(distributions):
         print(f"Skipping dataset {dataset_uri} - no valid distributions")
         return None
@@ -61,6 +61,15 @@ def extract_dataset(graph, dataset_uri):
     return dataset
 
 
+def convert_license(license_code):
+    license_code_map = {
+        "NonCommercialAllowed-CommercialWithPermission-ReferenceRequired": "terms_by_ask"
+        }
+    if license_code in license_code_map.keys():
+        return license_code_map[license_code]
+    return license_code
+
+
 def extract_distributions(graph, dataset_uri):
     """Extracts distributions for a dataset."""
     distributions = []
@@ -73,7 +82,7 @@ def extract_distributions(graph, dataset_uri):
             description = {'de': 'Export der Daten'}
 
         media_type_uri = get_single_resource(graph, distribution_uri, DCAT.mediaType)
-    
+
         format_uri = get_single_resource(graph, distribution_uri, DCTERMS.format)
         format_code = None
 
@@ -91,6 +100,8 @@ def extract_distributions(graph, dataset_uri):
         availability_uri = get_single_resource(graph, distribution_uri, URIRef("http://data.europa.eu/r5r/availability"))
         license_uri = get_single_resource(graph, distribution_uri, DCTERMS.license)
         license_code = license_uri.split("/")[-1] if license_uri else None
+        if license_code:
+            license_code = convert_license(license_code)
         checksum_algorithm = get_literal(graph, distribution_uri, SPDX.checksumAlgorithm)
         checksum_value = get_literal(graph, distribution_uri, SPDX.checksumValue)
         packaging_format = get_literal(graph, distribution_uri, DCAT.packageFormat)
@@ -164,7 +175,7 @@ def has_valid_distributions(distributions):
     if not distributions:
         return False
     return any(is_valid_distribution(dist) for dist in distributions)
-    
+
 
 def remove_html_tags(text):
     """Remove HTML tags using BeautifulSoup."""
@@ -363,7 +374,6 @@ def get_temporal_coverage(graph, subject):
     return temporal_coverage
 
 
-
 def get_is_referenced_by(graph, subject):
     """Retrieves isReferencedBy from RDF graph."""
     return [{
@@ -400,7 +410,6 @@ def get_qualified_attributions(graph, subject):
                 "hadRole": {"code": had_role.split("/")[-1]}
             })
     return attributions
-
 
 
 def get_relations(graph, subject):
