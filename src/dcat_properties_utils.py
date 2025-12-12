@@ -151,7 +151,7 @@ def is_valid_distribution(distribution):
     
     # Check media type
     media_code = distribution['mediaType'].get('code', '').lower()
-    excluded_media_types = ['application/pdf']
+    excluded_media_types = ['application/pdf','text/html']
     
     # Check format if available
     format_code = None

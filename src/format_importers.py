@@ -150,11 +150,24 @@ class PXImporter(FormatImporter):
                 if lang not in stub_dimensions[i]:
                     stub_dimensions[i][lang] = dim
 
-        # Extract HEADING dimension
-        heading_dimension = {}
+        # Extract HEADING dimensions
+        heading_dimensions = []
         for match in re.finditer(r'HEADING(?:\[(\w+)\])?="(.*?)";', lines, re.DOTALL):
             lang = match.group(1) or "de"
-            heading_dimension[lang] = match.group(2).strip()
+            dimensions_str = match.group(2)
+
+            parts = dimensions_str.split('","')
+            dimensions = []
+            for part in parts:
+                clean_part = part.strip().strip('"')
+                if clean_part:
+                    dimensions.append(clean_part)
+
+            for i, dim in enumerate(dimensions):
+                while len(heading_dimensions) <= i:
+                    heading_dimensions.append({})
+                heading_dimensions[i][lang] = dim
+
 
         # Convert to properties format
         for dim_data in stub_dimensions:
@@ -164,16 +177,14 @@ class PXImporter(FormatImporter):
                 is_year = any(keyword in first_name.lower() for keyword in self.YEAR_KEYWORDS)
                 data["properties"].append({"name": prop_name, "labels": dim_data, "datatype": "gYear" if is_year else "string"})
 
-        if heading_dimension:
-            first_name = next(iter(heading_dimension.values()))
-            prop_name = self.clean_property_name(first_name)
-            # Check if it's a year
-            is_year = any(
-                any(keyword in name.lower() for keyword in self.YEAR_KEYWORDS) for name in heading_dimension.values()
-            )
-            data["properties"].append(
-                {"name": prop_name, "labels": heading_dimension, "datatype": "gYear" if is_year else "string"}
-            )
+        for dim_data in heading_dimensions:
+            if dim_data:
+                first_name = next(iter(dim_data.values()))
+                prop_name = self.clean_property_name(first_name)
+                is_year = any(keyword in first_name.lower() for keyword in self.YEAR_KEYWORDS)
+                data["properties"].append(
+                    {"name": prop_name, "labels": dim_data, "datatype": "gYear" if is_year else "string"}
+                )
 
         return data
 
