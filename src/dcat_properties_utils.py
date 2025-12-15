@@ -146,8 +146,9 @@ def extract_distributions(graph, dataset_uri):
 
 def is_valid_distribution(distribution):
     """Check if a distribution is valid (not PDF)."""
-    # if not distribution.get('mediaType'):
-    #     return False
+    # TODO Sergiy: comment 2 lines below once we have agreed with opendata.swiss how to filter out distributions with pdf
+    if not distribution.get('mediaType'):
+        return False
     
     # Check media type
     media_code = (distribution.get('mediaType') or {}).get('code', '').lower()
@@ -174,7 +175,9 @@ def has_valid_distributions(distributions):
     """Check if a dataset has at least one valid distribution."""
     if not distributions:
         return False
-    return all(is_valid_distribution(dist) for dist in distributions)
+    return any(is_valid_distribution(dist) for dist in distributions)
+    # TODO Sergiy: use line below once we have agreed with opendata.swiss how to filter out distributions with pdf
+    # return all(is_valid_distribution(dist) for dist in distributions)
 
 
 def remove_html_tags(text):

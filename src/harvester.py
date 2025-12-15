@@ -288,16 +288,12 @@ class HarvesterOFS(CommonI14YAPI):
                 if "The resource already has its publication level set to" not in str(e.response.text):
                     raise requests.HTTPError(e)
 
-            try:
-                response = self.delete_i14y(dataset_id)
-                if response and response.status_code in {200, 204}:
-                    dataset_status_identifier_id_map["deleted"][identifier] = dataset_id
-                    print(f"Successfully deleted dataset: {identifier}")
-                else:
-                    print(f"Failed to delete dataset {identifier}: {response.status_code} - {response.text}")
-            except requests.HTTPError as e:
-                if "The resource cannot be deleted. It is referenced from other resources" not in str(e.response.text):
-                    raise requests.HTTPError(e)
+            response = self.delete_i14y(dataset_id)
+            if response and response.status_code in {200, 204}:
+                dataset_status_identifier_id_map["deleted"][identifier] = dataset_id
+                print(f"Successfully deleted dataset: {identifier}")
+            else:
+                print(f"Failed to delete dataset {identifier}: {response.status_code} - {response.text}")
 
         log = f"Harvest completed successfully at {datetime.datetime.now()}\n"
         for action in ["created", "updated", "unchanged", "deleted"]:
