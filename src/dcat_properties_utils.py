@@ -146,12 +146,12 @@ def extract_distributions(graph, dataset_uri):
 
 def is_valid_distribution(distribution):
     """Check if a distribution is valid (not PDF)."""
-    if not distribution.get('mediaType'):
-        return False
+    # if not distribution.get('mediaType'):
+    #     return False
     
     # Check media type
-    media_code = distribution['mediaType'].get('code', '').lower()
-    excluded_media_types = ['application/pdf','text/html']
+    media_code = (distribution.get('mediaType') or {}).get('code', '').lower()
+    excluded_media_types = ['application/pdf']
     
     # Check format if available
     format_code = None
@@ -174,7 +174,7 @@ def has_valid_distributions(distributions):
     """Check if a dataset has at least one valid distribution."""
     if not distributions:
         return False
-    return any(is_valid_distribution(dist) for dist in distributions)
+    return all(is_valid_distribution(dist) for dist in distributions)
 
 
 def remove_html_tags(text):

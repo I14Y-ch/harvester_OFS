@@ -13,6 +13,8 @@ def reauth_if_token_expired(func):
         try:
             return func(self, *args, **kwargs)
         except requests.HTTPError as e:
+            url = getattr(e.request, "url", "Unknown url")
+            print(url)
             print(f"API error: {e.response.status_code} - {e.response.text}")
             if e.response.status_code == 401:
                 self.api_token = self.get_access_token()

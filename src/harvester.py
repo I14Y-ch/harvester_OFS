@@ -37,46 +37,42 @@ class HarvesterOFS(CommonI14YAPI):
         has_more = True
 
         while has_more:
-            try:
-                params = {"skip": skip, "limit": limit}
-                response = requests.get(
-                    API_OFS_URL,
-                    params=params,
-                    verify=False,
-                    timeout=30,
-                )
+        
+            params = {"skip": skip, "limit": limit}
+            response = requests.get(
+                API_OFS_URL,
+                params=params,
+                verify=False,
+                timeout=30,
+            )
 
-                if response.status_code != 200:
-                    print(f"Error: Received status code {response.status_code}")
-                    break
-
-                if not response.text.strip():
-                    print("Received empty response")
-                    break
-
-                graph = Graph()
-                graph.parse(data=response.text, format="xml")
-
-                dataset_uris = list(graph.subjects(RDF.type, DCAT.Dataset))
-                if not dataset_uris:
-                    has_more = False
-                    break
-
-                for dataset_uri in dataset_uris:
-                    print(f"Processing dataset URI: {dataset_uri}")
-                    dataset = extract_dataset(graph, dataset_uri)
-
-                    if dataset and isinstance(dataset, dict):
-                        all_datasets.append(dataset)
-                    else:
-                        print(f"Skipping invalid dataset: {dataset_uri}")
-
-                print(f"Processed {len(dataset_uris)} datasets in this batch")
-                skip += limit
-
-            except Exception as e:
-                print(f"Error during API request: {e}")
+            if response.status_code != 200:
+                print(f"Error: Received status code {response.status_code}")
                 break
+
+            if not response.text.strip():
+                print("Received empty response")
+                break
+
+            graph = Graph()
+            graph.parse(data=response.text, format="xml")
+
+            dataset_uris = list(graph.subjects(RDF.type, DCAT.Dataset))
+            if not dataset_uris:
+                has_more = False
+                break
+
+            for dataset_uri in dataset_uris:
+                print(f"Processing dataset URI: {dataset_uri}")
+                dataset = extract_dataset(graph, dataset_uri)
+
+                if dataset and isinstance(dataset, dict):
+                    all_datasets.append(dataset)
+                else:
+                    print(f"Skipping invalid dataset: {dataset_uri}")
+
+            print(f"Processed {len(dataset_uris)} datasets in this batch")
+            skip += limit
 
         print(f"Total datasets retrieved: {len(all_datasets)}")
         return all_datasets
@@ -290,15 +286,18 @@ class HarvesterOFS(CommonI14YAPI):
                 print(f"Error changing publication level for {identifier}: {e.response.text}")
                 # TODO: if Status 405 means that the resource has already Internal publication level, it would be better to check status and not error message
                 if "The resource already has its publication level set to" not in str(e.response.text):
-                    continue  # Skip deletion if we can't change the level
+                    raise requests.HTTPError(e)
 
-            response = self.delete_i14y(dataset_id)
-
-            if response and response.status_code in {200, 204}:
-                dataset_status_identifier_id_map["deleted"][identifier] = dataset_id
-                print(f"Successfully deleted dataset: {identifier}")
-            else:
-                print(f"Failed to delete dataset {identifier}: {response.status_code} - {response.text}")
+            try:
+                response = self.delete_i14y(dataset_id)
+                if response and response.status_code in {200, 204}:
+                    dataset_status_identifier_id_map["deleted"][identifier] = dataset_id
+                    print(f"Successfully deleted dataset: {identifier}")
+                else:
+                    print(f"Failed to delete dataset {identifier}: {response.status_code} - {response.text}")
+            except requests.HTTPError as e:
+                if "The resource cannot be deleted. It is referenced from other resources" not in str(e.response.text):
+                    raise requests.HTTPError(e)
 
         log = f"Harvest completed successfully at {datetime.datetime.now()}\n"
         for action in ["created", "updated", "unchanged", "deleted"]:
