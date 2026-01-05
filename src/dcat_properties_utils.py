@@ -255,9 +255,9 @@ def normalize_text(text):
 def get_multilingual_keywords(graph: Graph, subject: URIRef, predicate: URIRef) -> List[Dict]:
     """Retrieves only keywords with explicit language tags."""
     return [
-        {str(lang): str(keyword_obj)}
+        {"label": {str(lang): str(keyword_obj)}}
         for keyword_obj in graph.objects(subject, predicate)
-        if keyword_obj is not None and (lang := getattr(keyword_obj, 'language', None))
+        if keyword_obj is not None and (lang := getattr(keyword_obj, "language", None))
     ]
 
 
