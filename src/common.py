@@ -4,6 +4,7 @@ from time import time
 from typing import Any, Dict
 import requests
 import re
+from config import I14Y_USER_AGENT
 
 
 def reauth_if_token_expired(func):
@@ -90,7 +91,7 @@ class CommonI14YAPI:
         all_datasets = []
 
         url = f"{self.api_base_url}/datasets"
-        headers = {"Authorization": self.api_token, "Accept": "application/json"}
+        headers = {"Authorization": self.api_token, "Accept": "application/json", "User-Agent": I14Y_USER_AGENT}
         i = 1
         has_more = True
 

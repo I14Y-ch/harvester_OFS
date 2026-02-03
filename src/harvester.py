@@ -37,14 +37,11 @@ class HarvesterOFS(CommonI14YAPI):
         has_more = True
 
         while has_more:
-        
+
+            headers = {"User-Agent": I14Y_USER_AGENT}
+
             params = {"skip": skip, "limit": limit}
-            response = requests.get(
-                API_OFS_URL,
-                params=params,
-                verify=False,
-                timeout=30,
-            )
+            response = requests.get(API_OFS_URL, params=params, verify=False, timeout=30, headers=headers)
 
             if response.status_code != 200:
                 print(f"Error: Received status code {response.status_code}")
@@ -111,6 +108,7 @@ class HarvesterOFS(CommonI14YAPI):
                 "Content-Type": "application/json",
                 "Accept": "*/*",
                 "Accept-encoding": "json",
+                "User-Agent": I14Y_USER_AGENT,
             },
             verify=False,
         )
@@ -128,6 +126,7 @@ class HarvesterOFS(CommonI14YAPI):
                 "Content-Type": "application/json",
                 "Accept": "*/*",
                 "Accept-encoding": "json",
+                "User-Agent": I14Y_USER_AGENT,
             },
             verify=False,
         )
@@ -136,7 +135,11 @@ class HarvesterOFS(CommonI14YAPI):
 
     @reauth_if_token_expired
     def delete_i14y(self, dataset_id):
-        headers = {"Authorization": self.api_token, "Content-Type": "application/json"}
+        headers = {
+            "Authorization": self.api_token,
+            "Content-Type": "application/json",
+            "User-Agent": I14Y_USER_AGENT,
+        }
         try:
             url_structures = f"{self.api_base_url}/datasets/{dataset_id}/structures"
             requests.delete(url_structures, headers=headers, verify=False)
@@ -161,7 +164,11 @@ class HarvesterOFS(CommonI14YAPI):
     @reauth_if_token_expired
     def submit_to_api(self, payload, identifier=None, previous_ids=None):
         """Submits the dataset payload to the API."""
-        headers = {"Authorization": self.api_token, "Content-Type": "application/json"}
+        headers = {
+            "Authorization": self.api_token,
+            "Content-Type": "application/json",
+            "User-Agent": I14Y_USER_AGENT,
+        }
 
         action = "created"
         if identifier and previous_ids and identifier in previous_ids.keys():
@@ -212,12 +219,7 @@ class HarvesterOFS(CommonI14YAPI):
             }
         }
         """
-        dataset_status_identifier_id_map = {
-            "created": {},
-            "updated": {},
-            "unchanged": {},
-            "deleted": {}
-        }
+        dataset_status_identifier_id_map = {"created": {}, "updated": {}, "unchanged": {}, "deleted": {}}
 
         print("Fetching datasets from API...")
 
@@ -257,9 +259,7 @@ class HarvesterOFS(CommonI14YAPI):
                 print(f"{action.capitalize()} dataset detected: {identifier}")
 
                 payload = self.create_dataset_payload(dataset)
-                response_id, action = self.submit_to_api(
-                    payload, identifier, all_existing_datasets_identifier_id_map
-                )
+                response_id, action = self.submit_to_api(payload, identifier, all_existing_datasets_identifier_id_map)
                 response_id = response_id.strip('"')
 
                 if action == "created":

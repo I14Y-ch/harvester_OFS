@@ -12,7 +12,7 @@ from datetime import datetime
 from rdflib import Graph, Namespace, RDF, Literal
 from rdflib.namespace import SH, RDFS, XSD, DCTERMS
 from typing import Dict, List
-from config import ORGANIZATION_ID
+from config import I14Y_USER_AGENT, ORGANIZATION_ID
 from format_importers import get_suitable_importer
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -137,6 +137,7 @@ class StructureImporter(CommonI14YAPI):
         """Upload SHACL structure to API"""
         headers = {
             "Authorization": self.api_token,
+            "User-Agent": I14Y_USER_AGENT,
             # Remove Content-Type header; requests will set it automatically for multipart/form-data
         }
 
@@ -144,7 +145,6 @@ class StructureImporter(CommonI14YAPI):
 
         # Prepare the file for multipart upload
         files = {"file": ("structure.ttl", turtle_data, "text/turtle")}
-
 
         print(f"Uploading structure to {url}...")
         response = requests.post(url, headers=headers, files=files, verify=False, timeout=30)
@@ -154,11 +154,14 @@ class StructureImporter(CommonI14YAPI):
             print(f"\tStructure uploaded: {response.text.strip()}")
             return True
 
-
     @reauth_if_token_expired
     def delete_structure(self, dataset_id: str) -> bool:
         """Delete existing structure"""
-        headers = {"Authorization": self.api_token, "Content-Type": "application/json"}
+        headers = {
+            "Authorization": self.api_token,
+            "Content-Type": "application/json",
+            "User-Agent": I14Y_USER_AGENT,
+        }
 
         url = f"{self.api_base_url}/datasets/{dataset_id}/structures"
 

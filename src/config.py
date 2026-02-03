@@ -11,10 +11,10 @@ GET_TOKEN_URL_ABN = "https://identity.i14y.a.c.bfs.admin.ch/realms/bfs-sis-a/pro
 GET_TOKEN_URL_PROD = "https://identity.i14y.c.bfs.admin.ch/realms/bfs-sis-p/protocol/openid-connect/token"
 
 # Organization settings
-ORGANIZATION_ID =  "CH1"
-DEFAULT_PUBLISHER = {
-    "identifier": ORGANIZATION_ID
-}
+ORGANIZATION_ID = "CH1"
+DEFAULT_PUBLISHER = {"identifier": ORGANIZATION_ID}
 
 # File format (.xml and .rdf -> "xml", .ttl -> "ttl")
 FILE_FORMAT = "xml"
+
+I14Y_USER_AGENT = "I14Y FSO Harvester (contact: i14y@bfs.admin.ch)"
