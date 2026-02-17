@@ -2,7 +2,7 @@ name: PROD - I14Y Harvester OGD Office Fédéral de Statistique catalogue
 
 on:
   schedule:
-    - cron: "0 0 * * *" # Runs everyday at midnight
+    - cron: "0 0 * * 1-5" # Runs everyday at midnight
   workflow_dispatch: # Allows manual triggering
 
 jobs:
@@ -25,7 +25,7 @@ jobs:
         env:
           CLIENT_KEY: ${{ secrets.CLIENT_ID_PROD }}
           CLIENT_SECRET: ${{ secrets.CLIENT_SECRET_PROD }}
-          GET_TOKEN_URL: " https://identity.i14y.c.bfs.admin.ch/realms/bfs-sis-p/protocol/openid-connect/token"
+          GET_TOKEN_URL: "https://identity.i14y.c.bfs.admin.ch/realms/bfs-sis-p/protocol/openid-connect/token"
           API_BASE_URL: "https://api.i14y.admin.ch/api/partner/v1"
           IMPORT_STRUCTURES: "True"
         run: python src/harvester.py
