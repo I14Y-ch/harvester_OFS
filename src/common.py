@@ -4,7 +4,7 @@ from time import time
 from typing import Any, Dict
 import requests
 import re
-from config import I14Y_USER_AGENT
+from config import DEBUG_LOCAL_TEST, I14Y_USER_AGENT, PROXIES
 
 
 def reauth_if_token_expired(func):
@@ -60,6 +60,13 @@ class CommonI14YAPI:
             self.api_token = self.get_access_token()
             self.bfs_identifier_pattern = re.compile(r"^\d+(-[a-z]+)?@bundesamt-fur-statistik-bfs$")
             self.datasets_file_path = os.path.join(os.getcwd(), "OGD_OFS", "data", "datasets.json")
+            self.session = requests.Session()
+
+            if DEBUG_LOCAL_TEST:
+                self.session.verify = False
+                self.session.proxies = PROXIES
+            else:
+                self.session.verify = True
         except (KeyError, TypeError):
             exception_str = "You need to provide the following parameters in a dict:"
             exception_str += "\n- client_key: client key to generate token"
@@ -72,7 +79,7 @@ class CommonI14YAPI:
     def get_access_token(self):
         """Generated an access token from client key and client secret"""
         data = {"grant_type": "client_credentials"}
-        response = requests.post(
+        response = self.session.post(
             self.api_get_token_url,
             data=data,
             verify=False,
@@ -101,7 +108,7 @@ class CommonI14YAPI:
                 "pageSize": pageSize,
                 "page": i,
             }
-            response = requests.get(url, params=params, headers=headers, verify=False)
+            response = self.session.get(url, params=params, headers=headers, verify=False)
             response.raise_for_status()
             data = response.json()
             for dataset in data["data"]:

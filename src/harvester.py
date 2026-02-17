@@ -1,3 +1,4 @@
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import requests
 from common import CommonI14YAPI, reauth_if_token_expired
 from config import *
@@ -41,7 +42,7 @@ class HarvesterOFS(CommonI14YAPI):
             headers = {"User-Agent": I14Y_USER_AGENT}
 
             params = {"skip": skip, "limit": limit}
-            response = requests.get(API_OFS_URL, params=params, verify=False, timeout=30, headers=headers)
+            response = self.session.get(API_OFS_URL, params=params, verify=False, timeout=30, headers=headers)
 
             if response.status_code != 200:
                 print(f"Error: Received status code {response.status_code}")
@@ -100,7 +101,7 @@ class HarvesterOFS(CommonI14YAPI):
     @reauth_if_token_expired
     def change_level_i14y(self, id, level):
         """Change publication level of a dataset in i14y"""
-        response = requests.put(
+        response = self.session.put(
             url=f"{self.api_base_url}/datasets/{id}/publication-level",
             params={"level": level},
             headers={
@@ -118,7 +119,7 @@ class HarvesterOFS(CommonI14YAPI):
     @reauth_if_token_expired
     def change_status_i14y(self, id, status):
         """Change registration status of a dataset in i14y"""
-        response = requests.put(
+        response = self.session.put(
             url=f"{self.api_base_url}/datasets/{id}/registration-status",
             params={"status": status},
             headers={
@@ -142,11 +143,11 @@ class HarvesterOFS(CommonI14YAPI):
         }
         try:
             url_structures = f"{self.api_base_url}/datasets/{dataset_id}/structures"
-            requests.delete(url_structures, headers=headers, verify=False)
+            self.session.delete(url_structures, headers=headers, verify=False)
         except requests.HTTPError as e:
             print(f"Error trying to delete structure: {e.response.status_code} - {e.response.text}")
         url = f"{self.api_base_url}/datasets/{dataset_id}"
-        response = requests.delete(url, headers=headers, verify=False)
+        response = self.session.delete(url, headers=headers, verify=False)
         response.raise_for_status()
 
         return response
@@ -172,18 +173,25 @@ class HarvesterOFS(CommonI14YAPI):
 
         action = "created"
         if identifier and previous_ids and identifier in previous_ids.keys():
-            dataset_id = previous_ids[identifier]["id"]
+            dataset_id = previous_ids[identifier]
             url = f"{self.api_base_url}/datasets/{dataset_id}"
-            response = requests.put(url, json=payload, headers=headers, verify=False)
+            response = self.session.put(url, json=payload, headers=headers)
             action = "updated"
         else:
             url = f"{self.api_base_url}/datasets"
-            response = requests.post(url, json=payload, headers=headers, verify=False)
+            response = self.session.post(url, json=payload, headers=headers)
 
         if response.status_code not in {200, 201, 204}:
             response.raise_for_status()
 
-        return response.text, action
+        body = (response.text or "").strip()
+
+        if action == "updated":
+            returned_id = body.strip('"') if body else dataset_id
+            return returned_id, action
+
+        returned_id = body.strip('"') if body else dataset_id
+        return returned_id, action
 
     def parse_date(self, date_str):
         """Safely parse a date string, returning None if invalid or missing"""
@@ -194,106 +202,115 @@ class HarvesterOFS(CommonI14YAPI):
         except (ValueError, TypeError):
             return None
 
-    def harvest(self):
+    def _process_one_dataset(self, dataset, all_existing_map, yesterday):
+        identifier = dataset["identifiers"][0]
 
-        # Get yesterday's date in UTC+1
+        print(f"\nProcessing dataset: {identifier}")
+        print(f"Issued date: {dataset.get('issued')}")
+        print(f"Modified date: {dataset.get('modified')}")
+
+        modified_date = self.parse_date(dataset.get("modified"))
+        created_date = self.parse_date(dataset.get("issued", dataset.get("modified")))
+
+        is_new_dataset = identifier not in all_existing_map.keys()
+        is_updated_dataset = modified_date and modified_date > yesterday
+
+        existing_dataset_id = all_existing_map[identifier] if identifier in all_existing_map.keys() else None
+
+        if existing_dataset_id and not is_updated_dataset:
+            return {"status": "unchanged", "identifier": identifier, "dataset_id": existing_dataset_id}
+
+        elif is_new_dataset or is_updated_dataset:
+            action = "created" if is_new_dataset else "updated"
+            print(f"{action.capitalize()} dataset detected: {identifier}")
+
+            payload = self.create_dataset_payload(dataset)
+            response_id, action = self.submit_to_api(payload, identifier, all_existing_map)
+            response_id = response_id.strip('"')
+
+            if action == "created":
+                self.change_level_i14y(response_id, "Public")
+                self.change_status_i14y(response_id, "Recorded")
+
+            print(f"Success - Dataset {action}: {response_id}\n")
+
+            return {"status": action, "identifier": identifier, "dataset_id": response_id}
+
+        return {"status": "skipped", "identifier": identifier, "dataset_id": None}
+
+    def _delete_one_dataset(self, identifier, dataset_id):
+        try:
+            self.change_level_i14y(dataset_id, "Internal")
+            print(f"Changed publication level to Internal for {identifier}")
+        except requests.HTTPError as e:
+            txt = e.response.text if e.response is not None else str(e)
+            print(f"Error changing publication level for {identifier}: {txt}")
+            if "The resource already has its publication level set to" not in str(txt):
+                raise
+
+        try:
+            response = self.delete_i14y(dataset_id)
+            print(f"Successfully deleted dataset: {identifier}")
+        except requests.HTTPError as e:
+            code = e.response.status_code if e.response is not None else "?"
+            txt = e.response.text if e.response is not None else str(e)
+            print(f"Failed to delete dataset {identifier}: {code} - {txt}")
+            raise
+
+        return {"status": "deleted", "identifier": identifier, "dataset_id": dataset_id}
+
+    def harvest(self):
         utc_plus_1 = datetime.timezone(datetime.timedelta(hours=1))
         now_utc_plus_1 = datetime.datetime.now(utc_plus_1)
         yesterday = now_utc_plus_1 - datetime.timedelta(days=1)
 
-        """
-        This dict has as key the status of the dataset (created/updated/unchanged/deleted)
-            created/updated/unchanged/deleted contains a dict with the bfs identifier as key and i14y id as value
-        dataset_status_identifier_id_map : {
-            "created" : {
-                "bfs_identifier": i14y_id
-            },
-            "updated" : {
-                "bfs_identifier": i14y_id
-            },
-            "unchanged" : {
-                "bfs_identifier": i14y_id
-            },
-            "deleted" : {
-                "bfs_identifier": i14y_id
-            }
-        }
-        """
         dataset_status_identifier_id_map = {"created": {}, "updated": {}, "unchanged": {}, "deleted": {}}
 
         print("Fetching datasets from API...")
-
-        datasets_bfs = self.fetch_datasets_from_api()
-
+        datasets = self.fetch_datasets_from_api()
         print("\nStarting dataset import...\n")
 
-        current_source_identifiers = {dataset["identifiers"][0] for dataset in datasets_bfs}
+        current_source_identifiers = {dataset["identifiers"][0] for dataset in datasets}
         all_existing_datasets = self.get_all_existing_datasets(self.organization)
-
         all_existing_datasets_identifier_id_map = self.get_all_identifier_id_map(all_existing_datasets)
 
-        for dataset in datasets_bfs:
-            identifier = dataset["identifiers"][0]
-            print(f"\nProcessing dataset: {identifier}")
-            print(f"Issued date: {dataset.get('issued')}")
-            print(f"Modified date: {dataset.get('modified')}")
+        with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+            futures = [
+                executor.submit(
+                    self._process_one_dataset,
+                    dataset,
+                    all_existing_datasets_identifier_id_map,
+                    yesterday,
+                )
+                for dataset in datasets
+            ]
 
-            modified_date = self.parse_date(dataset.get("modified"))
-            created_date = self.parse_date(dataset.get("issued", dataset.get("modified")))
+            for future in as_completed(futures):
+                result = future.result()
+                status = result["status"]
+                identifier = result["identifier"]
+                dataset_id = result["dataset_id"]
 
-            is_new_dataset = identifier not in all_existing_datasets_identifier_id_map.keys()
-            is_updated_dataset = modified_date and modified_date > yesterday
+                if status in dataset_status_identifier_id_map and dataset_id:
+                    dataset_status_identifier_id_map[status][identifier] = dataset_id
 
-            existing_dataset_id = (
-                all_existing_datasets_identifier_id_map[identifier]
-                if identifier in all_existing_datasets_identifier_id_map.keys()
-                else None
-            )
-
-            if existing_dataset_id and not is_updated_dataset:
-                dataset_status_identifier_id_map["unchanged"][identifier] = existing_dataset_id
-                print(f"No changes detected for dataset: {identifier} (already exists)\n")
-
-            elif is_new_dataset or is_updated_dataset:
-                action = "created" if is_new_dataset else "updated"
-                print(f"{action.capitalize()} dataset detected: {identifier}")
-
-                payload = self.create_dataset_payload(dataset)
-                response_id, action = self.submit_to_api(payload, identifier, all_existing_datasets_identifier_id_map)
-                response_id = response_id.strip('"')
-
-                if action == "created":
-                    dataset_status_identifier_id_map["created"][identifier] = response_id
-                    self.change_level_i14y(response_id, "Public")
-                    self.change_status_i14y(response_id, "Recorded")
-
-                elif action == "updated":
-                    dataset_status_identifier_id_map["updated"][identifier] = response_id
-
-                print(f"Success - Dataset {action}: {response_id}\n")
-
-        # Find datasets that exist in previous_ids but not in current source
         datasets_to_delete = set(all_existing_datasets_identifier_id_map.keys()) - current_source_identifiers
 
-        for identifier in datasets_to_delete:
+        with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+            delete_futures = [
+                executor.submit(
+                    self._delete_one_dataset,
+                    identifier,
+                    all_existing_datasets_identifier_id_map[identifier],
+                )
+                for identifier in datasets_to_delete
+            ]
 
-            dataset_id = all_existing_datasets_identifier_id_map[identifier]
-
-            try:
-                self.change_level_i14y(dataset_id, "Internal")
-                print(f"Changed publication level to Internal for {identifier}")
-            except requests.HTTPError as e:
-                print(f"Error changing publication level for {identifier}: {e.response.text}")
-                # TODO: if Status 405 means that the resource has already Internal publication level, it would be better to check status and not error message
-                if "The resource already has its publication level set to" not in str(e.response.text):
-                    raise requests.HTTPError(e)
-
-            response = self.delete_i14y(dataset_id)
-            if response and response.status_code in {200, 204}:
+            for future in as_completed(delete_futures):
+                result = future.result()
+                identifier = result["identifier"]
+                dataset_id = result["dataset_id"]
                 dataset_status_identifier_id_map["deleted"][identifier] = dataset_id
-                print(f"Successfully deleted dataset: {identifier}")
-            else:
-                print(f"Failed to delete dataset {identifier}: {response.status_code} - {response.text}")
 
         log = f"Harvest completed successfully at {datetime.datetime.now()}\n"
         for action in ["created", "updated", "unchanged", "deleted"]:
@@ -301,13 +318,12 @@ class HarvesterOFS(CommonI14YAPI):
             for bfs_identifier, i14y_id in dataset_status_identifier_id_map[action].items():
                 log += f"\n- {bfs_identifier} : {i14y_id}"
 
-        # Save log in root directory
         log_path = os.path.join(os.getcwd(), "harvest_log.txt")
         with open(log_path, "w") as f:
             f.write(log)
 
         print("\n=== Import Summary ===")
-        print(f"Total processed: {len(datasets_bfs)}")
+        print(f"Total processed: {len(datasets)}")
         for action in ["created", "updated", "unchanged", "deleted"]:
             print(f"Total {action.capitalize()}: {len(dataset_status_identifier_id_map[action])}")
 
@@ -330,6 +346,5 @@ if __name__ == "__main__":
     harvester.harvest()
 
     import_structures = os.environ.get("IMPORT_STRUCTURES", "False") == "True"
-    # If ABN, we import the structures (not in prod for now)
     if import_structures:
         StructureImporter.execute(api_params)

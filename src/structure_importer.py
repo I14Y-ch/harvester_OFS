@@ -2,6 +2,7 @@
 Extensible structure importer - works with any format importer
 """
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import json
 import os
 import traceback
@@ -12,7 +13,7 @@ from datetime import datetime
 from rdflib import Graph, Namespace, RDF, Literal
 from rdflib.namespace import SH, RDFS, XSD, DCTERMS
 from typing import Dict, List
-from config import I14Y_USER_AGENT, ORGANIZATION_ID
+from config import I14Y_USER_AGENT, MAX_WORKERS, ORGANIZATION_ID
 from format_importers import get_suitable_importer
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -147,7 +148,7 @@ class StructureImporter(CommonI14YAPI):
         files = {"file": ("structure.ttl", turtle_data, "text/turtle")}
 
         print(f"Uploading structure to {url}...")
-        response = requests.post(url, headers=headers, files=files, verify=False, timeout=30)
+        response = self.session.post(url, headers=headers, files=files, verify=False, timeout=30)
         response.raise_for_status()
 
         if response.status_code in {200, 201, 204}:
@@ -165,7 +166,7 @@ class StructureImporter(CommonI14YAPI):
 
         url = f"{self.api_base_url}/datasets/{dataset_id}/structures"
 
-        response = requests.delete(url, headers=headers, verify=False, timeout=30)
+        response = self.session.delete(url, headers=headers, verify=False, timeout=30)
         response.raise_for_status()
         if response.status_code in {200, 204}:
             print(f"Structure for dataset {dataset_id} deleted successfully.")
@@ -215,6 +216,25 @@ class StructureImporter(CommonI14YAPI):
                 else:
                     print(f"\tInvalid identifier (not a string): {identifier}")
         return processable
+
+    def _process_one_structure_job(self, bfs_identifier: str, dataset_id: str) -> Dict[str, str]:
+        """
+        Worker job: process one dataset structure import and return a standardized result.
+        """
+        try:
+            ok = self.process_dataset(dataset_id, bfs_identifier)
+            return {
+                "status": "created" if ok else "skipped",
+                "identifier": bfs_identifier,
+                "dataset_id": dataset_id,
+            }
+        except Exception as e:
+            return {
+                "status": "error",
+                "identifier": bfs_identifier,
+                "dataset_id": dataset_id,
+                "error": str(e),
+            }
 
     def process_dataset(self, dataset_id: str, identifier: str) -> bool:
         """Process a single dataset and create structure"""
@@ -291,17 +311,33 @@ class StructureImporter(CommonI14YAPI):
         print(f"Datasets to process: {len(dataset_to_process_identifier_data_map)}")
 
         # Process datasets
+        jobs = []
         for bfs_identifier, data in dataset_to_process_identifier_data_map.items():
             dataset_id = data.get("id")
             if not dataset_id:
                 continue
+            jobs.append((bfs_identifier, dataset_id))
 
-            print(f"Processing dataset: {bfs_identifier}")
+        with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+            futures = [
+                executor.submit(self._process_one_structure_job, bfs_identifier, dataset_id)
+                for bfs_identifier, dataset_id in jobs
+            ]
 
-            if self.process_dataset(dataset_id, bfs_identifier):
-                created_structure_datasets.append(f"{bfs_identifier} : {dataset_id}")
-            else:
-                skipped_structure_datasets.append(f"{bfs_identifier} : {dataset_id}")
+            for future in as_completed(futures):
+                r = future.result()
+                status = r["status"]
+                bfs_identifier = r["identifier"]
+                dataset_id = r["dataset_id"]
+
+                if status == "created":
+                    created_structure_datasets.append(f"{bfs_identifier} : {dataset_id}")
+                elif status == "skipped":
+                    skipped_structure_datasets.append(f"{bfs_identifier} : {dataset_id}")
+                else:
+                    error_structure_datasets.append(
+                        f"{bfs_identifier} : {dataset_id} -> {r.get('error', 'unknown error')}"
+                    )
 
         created_structures = len(created_structure_datasets)
         skipped = len(skipped_structure_datasets)

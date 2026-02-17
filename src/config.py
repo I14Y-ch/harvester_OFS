@@ -1,4 +1,7 @@
 # OGD OFS API
+import os
+
+
 API_OFS_URL = "https://dam-api.bfs.admin.ch/hub/api/ogd/harvest"
 
 # I14Y API configuration
@@ -18,3 +21,8 @@ DEFAULT_PUBLISHER = {"identifier": ORGANIZATION_ID}
 FILE_FORMAT = "xml"
 
 I14Y_USER_AGENT = "I14Y FSO Harvester (contact: i14y@bfs.admin.ch)"
+
+DEBUG_LOCAL_TEST = os.environ.get("DEBUG_LOCAL_TEST", "false") == "true"
+PROXIES = {"http": "http://proxy-bvcol.admin.ch:8080", "https": "http://proxy-bvcol.admin.ch:8080"}
+
+MAX_WORKERS = 5
