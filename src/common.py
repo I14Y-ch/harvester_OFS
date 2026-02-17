@@ -57,7 +57,6 @@ class CommonI14YAPI:
             self.api_get_token_url = api_params["api_get_token_url"]
             self.client_key = api_params["client_key"]
             self.client_secret = api_params["client_secret"]
-            self.api_token = self.get_access_token()
             self.bfs_identifier_pattern = re.compile(r"^\d+(-[a-z]+)?@bundesamt-fur-statistik-bfs$")
             self.datasets_file_path = os.path.join(os.getcwd(), "OGD_OFS", "data", "datasets.json")
             self.session = requests.Session()
@@ -67,6 +66,7 @@ class CommonI14YAPI:
                 self.session.proxies = PROXIES
             else:
                 self.session.verify = True
+            self.api_token = self.get_access_token()
         except (KeyError, TypeError):
             exception_str = "You need to provide the following parameters in a dict:"
             exception_str += "\n- client_key: client key to generate token"
