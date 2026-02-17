@@ -101,20 +101,24 @@ class HarvesterOFS(CommonI14YAPI):
     @reauth_if_token_expired
     def change_level_i14y(self, id, level):
         """Change publication level of a dataset in i14y"""
-        response = self.session.put(
-            url=f"{self.api_base_url}/datasets/{id}/publication-level",
-            params={"level": level},
-            headers={
-                "Authorization": self.api_token,
-                "Content-Type": "application/json",
-                "Accept": "*/*",
-                "Accept-encoding": "json",
-                "User-Agent": I14Y_USER_AGENT,
-            },
-            verify=False,
-        )
-        response.raise_for_status()
-        return response
+        try:
+            response = self.session.put(
+                url=f"{self.api_base_url}/datasets/{id}/publication-level",
+                params={"level": level},
+                headers={
+                    "Authorization": self.api_token,
+                    "Content-Type": "application/json",
+                    "Accept": "*/*",
+                    "Accept-encoding": "json",
+                    "User-Agent": I14Y_USER_AGENT,
+                },
+                verify=False,
+            )
+            response.raise_for_status()
+        except requests.HTTPError as e:
+            txt = e.response.text if e.response is not None else str(e)
+            if "The resource already has its publication level set to" not in str(txt):
+                raise
 
     @reauth_if_token_expired
     def change_status_i14y(self, id, status):
@@ -239,14 +243,9 @@ class HarvesterOFS(CommonI14YAPI):
         return {"status": "skipped", "identifier": identifier, "dataset_id": None}
 
     def _delete_one_dataset(self, identifier, dataset_id):
-        try:
-            self.change_level_i14y(dataset_id, "Internal")
-            print(f"Changed publication level to Internal for {identifier}")
-        except requests.HTTPError as e:
-            txt = e.response.text if e.response is not None else str(e)
-            print(f"Error changing publication level for {identifier}: {txt}")
-            if "The resource already has its publication level set to" not in str(txt):
-                raise
+
+        self.change_level_i14y(dataset_id, "Internal")
+        print(f"Changed publication level to Internal for {identifier}")
 
         try:
             response = self.delete_i14y(dataset_id)
