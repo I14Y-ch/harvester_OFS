@@ -123,20 +123,24 @@ class HarvesterOFS(CommonI14YAPI):
     @reauth_if_token_expired
     def change_status_i14y(self, id, status):
         """Change registration status of a dataset in i14y"""
-        response = self.session.put(
-            url=f"{self.api_base_url}/datasets/{id}/registration-status",
-            params={"status": status},
-            headers={
-                "Authorization": self.api_token,
-                "Content-Type": "application/json",
-                "Accept": "*/*",
-                "Accept-encoding": "json",
-                "User-Agent": I14Y_USER_AGENT,
-            },
-            verify=False,
-        )
-        response.raise_for_status()
-        return response
+        try:
+            response = self.session.put(
+                url=f"{self.api_base_url}/datasets/{id}/registration-status",
+                params={"status": status},
+                headers={
+                    "Authorization": self.api_token,
+                    "Content-Type": "application/json",
+                    "Accept": "*/*",
+                    "Accept-encoding": "json",
+                    "User-Agent": I14Y_USER_AGENT,
+                },
+                verify=False,
+            )
+            response.raise_for_status()
+        except requests.HTTPError as e:
+            # 405 happens if status is already the one to which we want to change
+            if e.response.status_code != 405:
+                raise
 
     @reauth_if_token_expired
     def delete_i14y(self, dataset_id):
