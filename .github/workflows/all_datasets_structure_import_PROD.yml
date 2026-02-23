@@ -2,35 +2,35 @@ name: PROD - Import structures for all existing datasets
 # Because StructureImporter imports structures only for created or updated datasets, this workflow is useful for a first import for all existing datasets
 
 on:
-  workflow_dispatch:  # Allows manual triggering
+  workflow_dispatch: # Allows manual triggering
 
 jobs:
   harvest-data:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-        
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.9'
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Install dependencies
-      run: pip install -r requirements.txt
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
 
-    - name: Run structure importer script
-      env:
-        CLIENT_KEY: ${{ secrets.CLIENT_ID_PROD }}
-        CLIENT_SECRET: ${{ secrets.CLIENT_SECRET_PROD }}
-        GET_TOKEN_URL: "https://identity.bit.admin.ch/realms/bfs-sis-p/protocol/openid-connect/token"
-        API_BASE_URL: "https://api.i14y.admin.ch/api/partner/v1"
-        IMPORT_ALL: "True"
-      run: python src/structure_importer.py
+      - name: Install dependencies
+        run: pip install -r requirements.txt
 
-    - name: Upload structure log
-      uses: actions/upload-artifact@v4
-      with:
-        name: structure_import_log
-        path: structure_import_log.txt
+      - name: Run structure importer script
+        env:
+          CLIENT_KEY: ${{ secrets.CLIENT_ID_PROD }}
+          CLIENT_SECRET: ${{ secrets.CLIENT_SECRET_PROD }}
+          GET_TOKEN_URL: "https://identity.i14y.c.bfs.admin.ch/realms/bfs-sis-p/protocol/openid-connect/token"
+          API_BASE_URL: "https://api.i14y.admin.ch/api/partner/v1"
+          IMPORT_ALL: "True"
+        run: python src/structure_importer.py
+
+      - name: Upload structure log
+        uses: actions/upload-artifact@v4
+        with:
+          name: structure_import_log
+          path: structure_import_log.txt

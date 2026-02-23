@@ -61,8 +61,8 @@ class StructureImporter(CommonI14YAPI):
         actions = ["created", "updated"]
 
         for action in actions:
-            for bfs_identifier, i14y_id in dataset_status_identifier_id_map[action].items():
-                datasets_to_process[bfs_identifier] = i14y_id
+            for identifier, i14y_id in dataset_status_identifier_id_map[action].items():
+                datasets_to_process[identifier] = i14y_id
 
         return datasets_to_process
 
@@ -366,6 +366,9 @@ class StructureImporter(CommonI14YAPI):
             f.write(log_content)
 
         print("Log saved to structure_import_log.txt")
+
+        if errors > 0:
+            raise Exception("There were errors in structure import script")
 
 
 if __name__ == "__main__":
