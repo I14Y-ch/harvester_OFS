@@ -265,11 +265,6 @@ class StructureImporter(CommonI14YAPI):
 
         print(f"\tProcessing {format_name} file: {file_id}")
 
-        # Always delete existing structure for updated datasets, optional for new ones
-        # For new datasets, try to delete in case there's an old structure
-        print(f"\tDeleting existing structure (dataset was updated)")
-        self.delete_structure(dataset_id)
-
         # Download and parse file
         metadata = importer.download_and_parse(dist)
 
