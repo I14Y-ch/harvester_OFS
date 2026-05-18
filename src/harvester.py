@@ -221,7 +221,7 @@ class HarvesterOFS(CommonI14YAPI):
         created_date = self.parse_date(dataset.get("issued", dataset.get("modified")))
 
         is_new_dataset = identifier not in all_existing_map.keys()
-        is_updated_dataset = modified_date and modified_date > yesterday
+        is_updated_dataset = UPDATE_ALL or modified_date and modified_date > yesterday
 
         existing_dataset_id = all_existing_map[identifier] if identifier in all_existing_map.keys() else None
 
