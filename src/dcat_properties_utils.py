@@ -26,6 +26,8 @@ def extract_dataset(graph, dataset_uri):
         print(f"Skipping dataset {dataset_uri} - no valid distributions")
         return None
 
+    keywords = get_multilingual_keywords(graph, dataset_uri, DCAT.keyword)
+
     dataset = { 
         "identifiers": [get_literal(graph, dataset_uri, DCTERMS.identifier)],
         "title": get_multilingual_literal(graph, dataset_uri, DCTERMS.title),
@@ -35,7 +37,7 @@ def extract_dataset(graph, dataset_uri):
         "modified": get_literal(graph, dataset_uri, DCTERMS.modified, is_date=True),
         "publisher": DEFAULT_PUBLISHER, 
         "landingPages": get_resource_list(graph, dataset_uri, DCAT.landingPage),
-        "keywords": get_multilingual_keywords(graph, dataset_uri, DCAT.keyword),
+        "keywords": keywords,
         "distributions": [dist for dist in distributions if is_valid_distribution(dist)],
         "languages": get_languages(graph, dataset_uri, DCTERMS.language),
         "contactPoints": extract_contact_points(graph, dataset_uri),
@@ -49,7 +51,7 @@ def extract_dataset(graph, dataset_uri):
         "version": get_literal(graph, dataset_uri, dcat3.version),
         "versionNotes": get_multilingual_literal(graph, dataset_uri, ADMS.versionNotes),
         "conformsTo": get_conforms_to(graph, dataset_uri),
-        "themes": get_themes(graph, dataset_uri, DCAT.theme), 
+        "themes": get_themes(graph, dataset_uri, DCAT.theme, keywords), 
         #"qualifiedRelations": [{"hadRole":{"code":"original"}, "relation":{"uri":get_literal(graph, dataset_uri, DCTERMS.identifier)}}]
         
     }
@@ -320,33 +322,94 @@ def get_frequency(graph, subject):
     return {"code": frequency_uri.split("/")[-1]} if frequency_uri else None
 
 
-def get_themes(graph, subject, predicate):
+def _normalize_theme_keyword(value):
+    """Normalizes keyword labels for exact, accent-insensitive comparisons."""
+    value = unicodedata.normalize("NFKD", str(value))
+    value = "".join(ch for ch in value if not unicodedata.combining(ch))
+    value = value.lower().strip()
+    value = re.sub(r"\s+", " ", value)
+    return value
+
+
+def _flatten_keyword_labels(keywords):
+    """Returns normalized keyword label values from the [{label: {lang: value}}] structure."""
+    labels = set()
+    for keyword in keywords or []:
+        for value in keyword.get("label", {}).values():
+            if value:
+                labels.add(_normalize_theme_keyword(value))
+    return labels
+
+
+def _keyword_matched_theme_codes(candidate_codes, keywords):
+    """Keeps only candidate theme codes explicitly confirmed by a thematic keyword."""
+    labels = _flatten_keyword_labels(keywords)
+    matched_codes = []
+
+    for code in candidate_codes:
+        aliases = {
+            _normalize_theme_keyword(alias)
+            for alias in I14Y_THEME_KEYWORD_ALIASES.get(code, set())
+        }
+        if labels & aliases:
+            matched_codes.append(code)
+
+    return matched_codes
+
+
+def _theme_codes_from_uri(theme_uri, keywords):
     """
-    Retrieves a list of unique i14y codes for themes.
-    Handles both literal values (e.g., "101") and URI values (e.g., "http://publications.europa.eu/resource/authority/data-theme/ECON").
-    Ensures that the collection does not contain repeated codes.
+    Resolves a theme URI to i14y theme code(s).
+
+    - DCAT-CH theme URIs are mapped directly through THEME_MAPPING.
+    - EU data-theme URIs are mapped only when there is a single candidate,
+      or when keywords disambiguate a one-to-many candidate set.
+    - Ambiguous EU themes without a keyword match return no code.
     """
-    unique_codes = set()  
+    # Direct DCAT-CH URI in source: preserve previous behaviour.
+    for code, uris in THEME_MAPPING.items():
+        if theme_uri in uris and "dcat-ap.ch/vocabulary/themes" in theme_uri:
+            return [code]
+
+    candidate_codes = EU_THEME_TO_I14Y_CANDIDATES.get(theme_uri, ())
+    if len(candidate_codes) == 1:
+        return list(candidate_codes)
+    if len(candidate_codes) > 1:
+        return _keyword_matched_theme_codes(candidate_codes, keywords)
+
+    return []
+
+
+def get_themes(graph, subject, predicate, keywords=None):
+    """
+    Retrieves unique i14y codes for themes.
+
+    EU data-theme values are treated as the source input. When an EU theme maps
+    to several possible DCAT-CH/i14y themes, keywords are used to select only
+    the matching candidate(s). If no candidate is confirmed by keywords, no theme
+    is returned for that EU theme.
+
+    Important: there is intentionally no default fallback theme.
+    """
+    unique_codes = set()
     themes = []
 
     for theme in graph.objects(subject, predicate):
-        theme_str = str(theme) 
-        theme_code = None
+        theme_codes = []
 
         if isinstance(theme, Literal):
-            theme_code = theme_str 
+            literal_code = str(theme).strip()
+            if literal_code in THEME_MAPPING:
+                theme_codes = [literal_code]
 
         elif isinstance(theme, URIRef):
-      
-            for code, uris in THEME_MAPPING.items():
-                if theme_str in uris:
-                    theme_code = code
-                    break
-        if theme_code and theme_code not in unique_codes:
-            unique_codes.add(theme_code) 
-            themes.append({"code": theme_code})
-    if not themes:
-         themes.append({"code": "125"})
+            theme_codes = _theme_codes_from_uri(str(theme), keywords)
+
+        for theme_code in theme_codes:
+            if theme_code not in unique_codes:
+                unique_codes.add(theme_code)
+                themes.append({"code": theme_code})
+
     return themes
 
 

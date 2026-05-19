@@ -149,11 +149,6 @@ class HarvesterOFS(CommonI14YAPI):
             "Content-Type": "application/json",
             "User-Agent": I14Y_USER_AGENT,
         }
-        try:
-            url_structures = f"{self.api_base_url}/datasets/{dataset_id}/structures"
-            self.session.delete(url_structures, headers=headers, verify=False)
-        except requests.HTTPError as e:
-            print(f"Error trying to delete structure: {e.response.status_code} - {e.response.text}")
         url = f"{self.api_base_url}/datasets/{dataset_id}"
         response = self.session.delete(url, headers=headers, verify=False)
         response.raise_for_status()
@@ -180,7 +175,7 @@ class HarvesterOFS(CommonI14YAPI):
         }
 
         action = "created"
-        if identifier and previous_ids and identifier in previous_ids.keys():
+        if identifier and previous_ids and identifier in previous_ids.keys() and not UPDATE_ALL:
             dataset_id = previous_ids[identifier]
             url = f"{self.api_base_url}/datasets/{dataset_id}"
             response = self.session.put(url, json=payload, headers=headers)
@@ -229,7 +224,9 @@ class HarvesterOFS(CommonI14YAPI):
             return {"status": "unchanged", "identifier": identifier, "dataset_id": existing_dataset_id}
 
         elif is_new_dataset or is_updated_dataset:
-            action = "created" if is_new_dataset else "updated"
+            if UPDATE_ALL and existing_dataset_id:
+                self._delete_one_dataset(identifier,existing_dataset_id)
+            action = "created" if is_new_dataset or (UPDATE_ALL and existing_dataset_id) else "updated"
             print(f"{action.capitalize()} dataset detected: {identifier}")
 
             payload = self.create_dataset_payload(dataset)
