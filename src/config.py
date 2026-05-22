@@ -25,7 +25,7 @@ I14Y_USER_AGENT = "I14Y FSO Harvester (contact: i14y@bfs.admin.ch)"
 DEBUG_LOCAL_TEST = os.environ.get("DEBUG_LOCAL_TEST", "false") == "true"
 PROXIES = {"http": "http://proxy-bvcol.admin.ch:8080", "https": "http://proxy-bvcol.admin.ch:8080"}
 
-MAX_WORKERS = 3
+MAX_WORKERS = 1
 
 # Useful when e.g. we have to change the parsing of the description
-UPDATE_ALL = False#os.environ.get("UPDATE_ALL", "false") == "true"
+UPDATE_ALL = os.environ.get("UPDATE_ALL", "false") == "true"
