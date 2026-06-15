@@ -7,6 +7,8 @@ from rdflib import Graph
 from rdflib.namespace import DCAT, RDF
 import json
 import os
+import random
+import time
 from dateutil import parser
 from typing import Dict, Any, List
 import datetime
@@ -42,7 +44,26 @@ class HarvesterOFS(CommonI14YAPI):
             headers = {"User-Agent": I14Y_USER_AGENT}
 
             params = {"skip": skip, "limit": limit}
-            response = self.session.get(API_OFS_URL, params=params, verify=False, timeout=30, headers=headers)
+            for attempt in range(1, 4):
+                try:
+                    response = self.session.get(
+                        API_OFS_URL,
+                        params=params,
+                        verify=False,
+                        timeout=30,
+                        headers=headers,
+                    )
+                    break
+                except requests.RequestException as e:
+                    if attempt == 3:
+                        raise
+
+                    cooldown = random.uniform(5, 10)
+                    print(
+                        f"Request failed on attempt {attempt}/3: {e}. "
+                        f"Retrying in {cooldown:.1f}s..."
+                    )
+                    time.sleep(cooldown)
 
             if response.status_code != 200:
                 print(f"Error: Received status code {response.status_code}")
