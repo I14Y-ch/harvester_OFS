@@ -53,6 +53,18 @@ class HarvesterOFS(CommonI14YAPI):
                         timeout=30,
                         headers=headers,
                     )
+                    if 500 <= response.status_code < 600:
+                        if attempt == 3:
+                            raise RuntimeError(f"DAM API returned status code {response.status_code}")
+
+                        cooldown = random.uniform(5, 10)
+                        print(
+                            f"DAM API returned status code {response.status_code} on attempt {attempt}/3. "
+                            f"Retrying in {cooldown:.1f}s..."
+                        )
+                        time.sleep(cooldown)
+                        continue
+
                     break
                 except requests.RequestException as e:
                     if attempt == 3:
@@ -66,18 +78,18 @@ class HarvesterOFS(CommonI14YAPI):
                     time.sleep(cooldown)
 
             if response.status_code != 200:
-                print(f"Error: Received status code {response.status_code}")
-                break
+                raise RuntimeError(f"DAM API returned status code {response.status_code}")
 
             if not response.text.strip():
-                print("Received empty response")
-                break
+                raise RuntimeError("DAM API returned an empty response")
 
             graph = Graph()
             graph.parse(data=response.text, format="xml")
 
             dataset_uris = list(graph.subjects(RDF.type, DCAT.Dataset))
             if not dataset_uris:
+                if skip == 0:
+                    raise RuntimeError("DAM API returned no datasets on the first page")
                 has_more = False
                 break
 
@@ -289,6 +301,10 @@ class HarvesterOFS(CommonI14YAPI):
 
         print("Fetching datasets from API...")
         datasets = self.fetch_datasets_from_api()
+
+        if not datasets:
+            raise RuntimeError("No datasets fetched from DAM API. Aborting harvest to avoid deleting production datasets.")
+
         print("\nStarting dataset import...\n")
 
         current_source_identifiers = {dataset["identifiers"][0] for dataset in datasets}
